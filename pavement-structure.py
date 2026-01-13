@@ -157,7 +157,7 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
     
     # เพิ่ม "Not to Scale"
     ax.text(x_start + layer_width, -4, 'Not to Scale',
-           ha='right', va='center', fontsize=8, style='italic')
+           ha='right', va='center', fontsize=4, style='italic')
     
     plt.tight_layout()
     return fig
