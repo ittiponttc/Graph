@@ -42,7 +42,9 @@ st.markdown("---")
 # =====================================================
 PRESET_MATERIALS = {
     "ผิวทางลาดยาง (AC)": {"color": "#1a1a1a", "pattern": "solid"},
-    "ผิวทางคอนกรีต (JPCP)": {"color": "#a9a9a9", "pattern": "solid"},
+    "ผิวทางคอนกรีต (JPCP/JRCP)": {"color": "#a9a9a9", "pattern": "solid"},
+    "ผิวทางคอนกรีต (CRCP)": {"color": "#a9a9a9", "pattern": "solid"},
+    "รองพื้นทางวัสดุ AC": {"color": "#1a1a1a", "pattern": "solid"},
     "พื้นทาง CTB": {"color": "#d3d3d3", "pattern": "dots"},
     "Lean Concrete Base": {"color": "#c0c0c0", "pattern": "hatch"},
     "หินคลุก (Crushed Rock)": {"color": "#d2b48c", "pattern": "dots"},
