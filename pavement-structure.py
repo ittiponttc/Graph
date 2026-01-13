@@ -168,7 +168,7 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
 with st.sidebar:
     st.header("⚙️ ตั้งค่าทั่วไป")
     
-    chart_title = st.text_input("หัวข้อรูป", value="โครงสร้างชั้นทาง")
+    chart_title = st.text_input("หัวข้อรูป", value="")
     
     num_layers = st.number_input(
         "จำนวนชั้น",
