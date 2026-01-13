@@ -73,7 +73,7 @@ HATCH_STYLES = {
 # =====================================================
 # ฟังก์ชันวาดโครงสร้างชั้นทาง (ปรับขนาดให้เล็กลง)
 # =====================================================
-def draw_pavement_structure(layers, figsize=(10, 6), title="โครงสร้างชั้นทาง"):
+def draw_pavement_structure(layers, figsize=(6,10), title="โครงสร้างชั้นทาง"):
     """
     วาดรูปโครงสร้างชั้นทาง (ขนาดกะทัดรัด)
     """
@@ -121,14 +121,14 @@ def draw_pavement_structure(layers, figsize=(10, 6), title="โครงสร�
         elif pattern == 'hatch':
             rect = patches.Rectangle(
                 (x_start, y_bottom), layer_width, thickness,
-                linewidth=1.5, edgecolor='black', facecolor=color,
+                linewidth=1, edgecolor='black', facecolor=color,
                 hatch=hatch_style
             )
             ax.add_patch(rect)
         else:
             rect = patches.Rectangle(
                 (x_start, y_bottom), layer_width, thickness,
-                linewidth=1.5, edgecolor='black', facecolor=color
+                linewidth=1, edgecolor='black', facecolor=color
             )
             ax.add_patch(rect)
         
@@ -137,7 +137,7 @@ def draw_pavement_structure(layers, figsize=(10, 6), title="โครงสร�
         ax.annotate('', xy=(dim_x, y_bottom), xytext=(dim_x, current_y),
                    arrowprops=dict(arrowstyle='<->', color='black', lw=1))
         ax.text(dim_x - 1.5, (y_bottom + current_y) / 2, f'{int(layer["thickness"])} cm',
-               ha='center', va='center', fontsize=9, rotation=90)
+               ha='center', va='center', fontsize=4, rotation=0)
         
         # เพิ่มชื่อวัสดุด้านขวา
         ax.text(x_start + layer_width + 0.3, (y_bottom + current_y) / 2, name,
@@ -195,7 +195,7 @@ with st.sidebar:
                 {"name": "ดินถม (Fill Material)", "thickness": 100, "color": "#f5deb3", "pattern": "solid"}
             ]
             st.rerun()
-        elif preset_choice == "ทางคอนกรีต (JPCP)":
+        elif preset_choice == "ผิวทางคอนกรีต (Rigid)":
             st.session_state['preset_layers'] = [
                 {"name": "ผิวทางคอนกรีต (JPCP)", "thickness": 28, "color": "#a9a9a9", "pattern": "solid"},
                 {"name": "Lean Concrete Base", "thickness": 15, "color": "#c0c0c0", "pattern": "hatch"},
