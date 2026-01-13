@@ -153,7 +153,7 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
     
     # เพิ่มหัวข้อ
     ax.text(x_start + layer_width/2, total_thickness * scale + 6, title,
-           ha='center', va='center', fontsize=12, fontweight='bold')
+           ha='center', va='center', fontsize=10, fontweight='bold')
     
     # เพิ่ม "Not to Scale"
     ax.text(x_start + layer_width, -4, 'Not to Scale',
