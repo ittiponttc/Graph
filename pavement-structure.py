@@ -12,15 +12,11 @@ from io import BytesIO
 
 # ตั้งค่า font ภาษาไทย (รองรับกรณีไม่มี font)
 try:
-    # ลองใช้ font Garuda (Thai font)
     mpl.rcParams['font.family'] = 'Garuda'
 except:
-    # ถ้าไม่มี ใช้ font default
     pass
 mpl.rcParams['axes.unicode_minus'] = False
 
-# สำหรับ Streamlit Cloud ให้ใช้ Sarabun จาก Google Fonts
-# หรือ Noto Sans Thai
 import matplotlib.font_manager as fm
 thai_fonts = ['Garuda', 'TH Sarabun New', 'Sarabun', 'Noto Sans Thai', 'Tahoma']
 for font in thai_fonts:
@@ -73,26 +69,29 @@ HATCH_STYLES = {
 }
 
 # =====================================================
-# ฟังก์ชันวาดโครงสร้างชั้นทาง
+# ฟังก์ชันวาดโครงสร้างชั้นทาง (ปรับขนาดให้เล็กลง)
 # =====================================================
-def draw_pavement_structure(layers, figsize=(12, 10), title="โครงสร้างชั้นทาง"):
+def draw_pavement_structure(layers, figsize=(10, 6), title="โครงสร้างชั้นทาง"):
     """
-    วาดรูปโครงสร้างชั้นทาง
+    วาดรูปโครงสร้างชั้นทาง (ขนาดกะทัดรัด)
     """
-    fig, ax = plt.subplots(figsize=figsize)
-    
     # คำนวณความหนารวม
     total_thickness = sum(layer['thickness'] for layer in layers)
     
-    # กำหนดขนาดของรูป
-    layer_width = 8
+    # ปรับ figsize ตามความหนารวม (ให้สั้นลง)
+    fig_height = max(4, min(8, total_thickness / 30))
+    fig, ax = plt.subplots(figsize=(figsize[0], fig_height))
+    
+    # กำหนดขนาดของรูป - ใช้ scale factor เพื่อให้รูปกะทัดรัด
+    scale = 100 / max(total_thickness, 100)  # normalize ให้ความสูงไม่เกิน 100 units
+    layer_width = 6
     x_start = 2
     
     # วาดแต่ละชั้นจากบนลงล่าง
-    current_y = total_thickness
+    current_y = total_thickness * scale
     
     for i, layer in enumerate(layers):
-        thickness = layer['thickness']
+        thickness = layer['thickness'] * scale
         color = layer.get('color', 'gray')
         pattern = layer.get('pattern', 'solid')
         hatch_style = layer.get('hatch_style', '///')
@@ -111,11 +110,11 @@ def draw_pavement_structure(layers, figsize=(12, 10), title="โครงสร�
             
             # เพิ่มจุด pattern
             np.random.seed(i * 42)
-            n_dots = int(thickness * layer_width * 0.8)
+            n_dots = int(thickness * layer_width * 0.5)
             if n_dots > 0 and thickness > 2:
-                dot_x = np.random.uniform(x_start + 0.3, x_start + layer_width - 0.3, n_dots)
+                dot_x = np.random.uniform(x_start + 0.2, x_start + layer_width - 0.2, n_dots)
                 dot_y = np.random.uniform(y_bottom + thickness*0.1, y_bottom + thickness*0.9, n_dots)
-                ax.scatter(dot_x, dot_y, s=15, c='gray', alpha=0.5)
+                ax.scatter(dot_x, dot_y, s=10, c='gray', alpha=0.5)
                 
         elif pattern == 'hatch':
             rect = patches.Rectangle(
@@ -131,32 +130,32 @@ def draw_pavement_structure(layers, figsize=(12, 10), title="โครงสร�
             )
             ax.add_patch(rect)
         
-        # เพิ่มเส้นบอกขนาด (dimension line) ด้านซ้าย
-        dim_x = x_start - 0.5
+        # เพิ่มเส้นบอกขนาด (dimension line) ด้านซ้าย - แสดงความหนาจริง
+        dim_x = x_start - 0.3
         ax.annotate('', xy=(dim_x, y_bottom), xytext=(dim_x, current_y),
-                   arrowprops=dict(arrowstyle='<->', color='black', lw=1.2))
-        ax.text(dim_x - 0.8, (y_bottom + current_y) / 2, f'{int(thickness)} cm',
-               ha='center', va='center', fontsize=11, rotation=90)
+                   arrowprops=dict(arrowstyle='<->', color='black', lw=1))
+        ax.text(dim_x - 0.6, (y_bottom + current_y) / 2, f'{int(layer["thickness"])} cm',
+               ha='center', va='center', fontsize=9, rotation=90)
         
         # เพิ่มชื่อวัสดุด้านขวา
-        ax.text(x_start + layer_width + 0.5, (y_bottom + current_y) / 2, name,
-               ha='left', va='center', fontsize=12)
+        ax.text(x_start + layer_width + 0.3, (y_bottom + current_y) / 2, name,
+               ha='left', va='center', fontsize=9)
         
         current_y = y_bottom
     
     # ตั้งค่าแกน
-    ax.set_xlim(-1, 18)
-    ax.set_ylim(-10, total_thickness + 15)
+    ax.set_xlim(-0.5, 14)
+    ax.set_ylim(-8, total_thickness * scale + 12)
     ax.set_aspect('equal')
     ax.axis('off')
     
     # เพิ่มหัวข้อ
-    ax.text(x_start + layer_width/2, total_thickness + 8, title,
-           ha='center', va='center', fontsize=16, fontweight='bold')
+    ax.text(x_start + layer_width/2, total_thickness * scale + 6, title,
+           ha='center', va='center', fontsize=12, fontweight='bold')
     
     # เพิ่ม "Not to Scale"
-    ax.text(x_start + layer_width, -5, 'Not to Scale',
-           ha='right', va='center', fontsize=10, style='italic')
+    ax.text(x_start + layer_width, -4, 'Not to Scale',
+           ha='right', va='center', fontsize=8, style='italic')
     
     plt.tight_layout()
     return fig
@@ -241,16 +240,8 @@ for row in range(rows_needed):
                     key=f"material_{layer_idx}"
                 )
                 
-                # ชื่อวัสดุ
-                default_name = preset_data['name'] if preset_data else material
-                if material != "กำหนดเอง":
-                    default_name = material
-                    
-                name = st.text_input(
-                    "ชื่อ/ป้ายกำกับ",
-                    value=default_name,
-                    key=f"name_{layer_idx}"
-                )
+                # ใช้ชื่อวัสดุที่เลือกเป็นป้ายกำกับอัตโนมัติ
+                name = material
                 
                 # ความหนา
                 default_thickness = preset_data['thickness'] if preset_data else 20
@@ -264,10 +255,7 @@ for row in range(rows_needed):
                 )
                 
                 # สี
-                default_color = preset_data['color'] if preset_data else PRESET_MATERIALS[material]['color']
-                if material != "กำหนดเอง":
-                    default_color = PRESET_MATERIALS[material]['color']
-                    
+                default_color = PRESET_MATERIALS[material]['color']
                 color = st.color_picker(
                     "สี",
                     value=default_color,
@@ -275,10 +263,7 @@ for row in range(rows_needed):
                 )
                 
                 # Pattern
-                default_pattern = preset_data['pattern'] if preset_data else PRESET_MATERIALS[material]['pattern']
-                if material != "กำหนดเอง":
-                    default_pattern = PRESET_MATERIALS[material]['pattern']
-                
+                default_pattern = PRESET_MATERIALS[material]['pattern']
                 pattern_keys = list(PATTERN_OPTIONS.keys())
                 default_pattern_idx = pattern_keys.index(default_pattern) if default_pattern in pattern_keys else 0
                 
