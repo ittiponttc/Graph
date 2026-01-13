@@ -49,9 +49,9 @@ PRESET_MATERIALS = {
     "Lean Concrete Base": {"color": "#c0c0c0", "pattern": "hatch"},
     "หินคลุก (Crushed Rock)": {"color": "#d2b48c", "pattern": "dots"},
     "รองพื้นทางวัสดุมวลรวม": {"color": "#d2a679", "pattern": "solid"},
-    "ดินถม (Fill Material)": {"color": "#f5deb3", "pattern": "solid"},
+    "ดินถมคันทาง (Embankment)": {"color": "#f5deb3", "pattern": "solid"},
     "ดินเดิม (Subgrade)": {"color": "#deb887", "pattern": "solid"},
-    "ทราย (Sand)": {"color": "#f4e4ba", "pattern": "dots"},
+    "ทรายถมคันทาง (Sand Embankment)": {"color": "#f4e4ba", "pattern": "dots"},
     "กำหนดเอง": {"color": "#cccccc", "pattern": "solid"}
 }
 
