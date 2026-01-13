@@ -137,7 +137,7 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
         ax.annotate('', xy=(dim_x, y_bottom), xytext=(dim_x, current_y),
                    arrowprops=dict(arrowstyle='<->', color='black', lw=0.1))
         ax.text(dim_x - 5, (y_bottom + current_y) / 2, f'{int(layer["thickness"])} cm',
-               ha='center', va='center', fontsize=6, rotation=0)
+               ha='center', va='center', fontsize=8, rotation=0)
         
         # เพิ่มชื่อวัสดุด้านขวา
         ax.text(x_start + layer_width + 0.7, (y_bottom + current_y) / 2, name,
@@ -157,7 +157,7 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
     
     # เพิ่ม "Not to Scale"
     ax.text(x_start + layer_width, -4, 'Not to Scale',
-           ha='right', va='center', fontsize=4, style='italic')
+           ha='right', va='center', fontsize=5, style='italic')
     
     plt.tight_layout()
     return fig
@@ -168,7 +168,7 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
 with st.sidebar:
     st.header("⚙️ ตั้งค่าทั่วไป")
     
-    chart_title = st.text_input("หัวข้อรูป", value="")
+    chart_title = st.text_input("หัวข้อรูป", value="โครงสร้างชั้นทาง โครงการ......")
     
     num_layers = st.number_input(
         "จำนวนชั้น",
