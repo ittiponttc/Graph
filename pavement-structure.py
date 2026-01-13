@@ -134,7 +134,7 @@ def draw_pavement_structure(layers, figsize=(10, 6), title="โครงสร�
         dim_x = x_start - 1.5
         ax.annotate('', xy=(dim_x, y_bottom), xytext=(dim_x, current_y),
                    arrowprops=dict(arrowstyle='<->', color='black', lw=1))
-        ax.text(dim_x - 0.8, (y_bottom + current_y) / 2, f'{int(layer["thickness"])} cm',
+        ax.text(dim_x - 1.5, (y_bottom + current_y) / 2, f'{int(layer["thickness"])} cm',
                ha='center', va='center', fontsize=9, rotation=90)
         
         # เพิ่มชื่อวัสดุด้านขวา
