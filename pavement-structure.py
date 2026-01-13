@@ -73,7 +73,7 @@ HATCH_STYLES = {
 # =====================================================
 # ฟังก์ชันวาดโครงสร้างชั้นทาง (ปรับขนาดให้เล็กลง)
 # =====================================================
-def draw_pavement_structure(layers, figsize=(6,10), title="โครงสร้างชั้นทาง"):
+def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้างชั้นทาง"):
     """
     วาดรูปโครงสร้างชั้นทาง (ขนาดกะทัดรัด)
     """
@@ -135,9 +135,9 @@ def draw_pavement_structure(layers, figsize=(6,10), title="โครงสร้
         # เพิ่มเส้นบอกขนาด (dimension line) ด้านซ้าย - แสดงความหนาจริง
         dim_x = x_start - 1.5
         ax.annotate('', xy=(dim_x, y_bottom), xytext=(dim_x, current_y),
-                   arrowprops=dict(arrowstyle='<->', color='black', lw=1))
+                   arrowprops=dict(arrowstyle='<->', color='black', lw=0.5))
         ax.text(dim_x - 1.5, (y_bottom + current_y) / 2, f'{int(layer["thickness"])} cm',
-               ha='center', va='center', fontsize=4, rotation=0)
+               ha='center', va='center', fontsize=2, rotation=0)
         
         # เพิ่มชื่อวัสดุด้านขวา
         ax.text(x_start + layer_width + 0.3, (y_bottom + current_y) / 2, name,
@@ -183,7 +183,7 @@ with st.sidebar:
     
     preset_choice = st.selectbox(
         "เลือกตัวอย่างโครงสร้าง",
-        ["-- กำหนดเอง --", "ทางลาดยาง (Flexible)", "ทางคอนกรีต (JPCP)"]
+        ["-- กำหนดเอง --", "ทางลาดยาง (Flexible)", "ทางคอนกรีต (Rigid)"]
     )
     
     if st.button("โหลดตัวอย่าง", use_container_width=True):
