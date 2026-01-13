@@ -140,8 +140,8 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
                ha='center', va='center', fontsize=6, rotation=0)
         
         # เพิ่มชื่อวัสดุด้านขวา
-        ax.text(x_start + layer_width + 0.3, (y_bottom + current_y) / 2, name,
-               ha='left', va='center', fontsize=7)
+        ax.text(x_start + layer_width + 0.7, (y_bottom + current_y) / 2, name,
+               ha='left', va='center', fontsize=8)
         
         current_y = y_bottom
     
