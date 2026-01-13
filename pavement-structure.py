@@ -79,7 +79,7 @@ def draw_pavement_structure(layers, figsize=(6, 6), title="โครงสร้
     total_thickness = sum(layer['thickness'] for layer in layers)
     
     # ปรับ figsize ตามความหนารวม (ให้สั้นลง)
-    fig_height = max(2, min(4, total_thickness / 30))
+    fig_height = max(4, min(8, total_thickness / 30))
     fig, ax = plt.subplots(figsize=(figsize[0], fig_height))
     
     # กำหนดขนาดของรูป - ใช้ scale factor เพื่อให้รูปกะทัดรัด
