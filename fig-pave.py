@@ -780,8 +780,7 @@ def main():
         st.markdown(f"<h3 style='color: #1E88E5; margin-top: -10px;'>{esal_text}</h3>", 
                     unsafe_allow_html=True)
         
-        st.markdown("---")
-        st.markdown("---")
+        st.markdown("***")
         
         # 2. Serviceability
         st.subheader("2️⃣ Serviceability")
