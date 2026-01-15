@@ -884,7 +884,7 @@ def main():
         
         # แปลง Cube เป็น Cylinder
         fc_cylinder = convert_cube_to_cylinder(fc_cube)
-        st.info(f"f'c (Cylinder) = 0.8 × {fc_cube} = **{fc_cylinder:.0f} ksc**")
+        st.info(f"f'c (Cylinder) = 0.833 × {fc_cube} = **{fc_cylinder:.0f} ksc**")
         
         # คำนวณ Ec
         ec = calculate_concrete_modulus(fc_cylinder)
@@ -1071,7 +1071,7 @@ def main():
             st.success(f"""
             ✅ **ผ่านเกณฑ์การออกแบบ**
             
-            ความหนา D = {d_selected} นิ้ว ({d_selected * 2.54:.1f} ซม.) 
+            ความหนา D = {d_selected} นิ้ว ({d_selected * 2.5:.1f} ซม.) 
             สามารถรองรับ ESAL ได้ {w18_selected:,.0f} ESALs
             ซึ่งมากกว่า ESAL ที่ต้องการ {w18_design:,.0f} ESALs
             
@@ -1081,7 +1081,7 @@ def main():
             st.error(f"""
             ❌ **ไม่ผ่านเกณฑ์การออกแบบ**
             
-            ความหนา D = {d_selected} นิ้ว ({d_selected * 2.54:.1f} ซม.) 
+            ความหนา D = {d_selected} นิ้ว ({d_selected * 2.5:.1f} ซม.) 
             รองรับ ESAL ได้เพียง {w18_selected:,.0f} ESALs
             ซึ่งน้อยกว่า ESAL ที่ต้องการ {w18_design:,.0f} ESALs
             
