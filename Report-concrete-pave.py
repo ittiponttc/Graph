@@ -763,7 +763,7 @@ def main():
         # คำนวณ ΔPSI
         delta_psi = 4.5 - pt
         st.info(f"ΔPSI = 4.5 - {pt:.1f} = **{delta_psi:.1f}**")
-         )
+         
         st.markdown("---")
        
         
