@@ -1,4 +1,727 @@
- # แสดงรูปโครงสร้างชั้นทาง
+"""
+โปรแกรมออกแบบและตรวจสอบความหนาถนนคอนกรีต (Rigid Pavement)
+ตามวิธี AASHTO 1993
+รองรับทั้ง JPCP (Jointed Plain Concrete Pavement) และ CRCP (Continuously Reinforced Concrete Pavement)
+
+พัฒนาสำหรับใช้ในการเรียนการสอน
+ภาควิชาครุศาสตร์โยธา มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ
+"""
+
+import streamlit as st
+import math
+from io import BytesIO
+from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib import rcParams
+
+# ============================================================
+# ส่วนที่ 1: ค่าคงที่และตารางอ้างอิง AASHTO 1993
+# ============================================================
+
+# ตารางค่า ZR (Standard Normal Deviate) ตามระดับความเชื่อมั่น
+ZR_TABLE = {
+    50: -0.000,
+    60: -0.253,
+    70: -0.524,
+    75: -0.674,
+    80: -0.841,
+    85: -1.037,
+    90: -1.282,
+    91: -1.340,
+    92: -1.405,
+    93: -1.476,
+    94: -1.555,
+    95: -1.645,
+    96: -1.751,
+    97: -1.881,
+    98: -2.054,
+    99: -2.327
+}
+
+# ค่า Load Transfer Coefficient (J) ตามประเภทถนนและการถ่ายแรง
+# อ้างอิง: AASHTO 1993 Guide, Table 2.6
+J_VALUES = {
+    "JPCP + Dowel + Tied Shoulder": 2.7,
+    "JPCP + Dowel Bar (AC Shoulder)": 3.2,
+    "JPCP ไม่มี Dowel Bar": 3.8,
+    "CRCP + Tied Shoulder": 2.3,
+    "CRCP (AC Shoulder)": 2.9
+}
+
+# ค่า Drainage Coefficient (Cd) มาตรฐาน
+CD_DEFAULT = 1.0
+
+# ============================================================
+# ส่วนที่ 2: ฟังก์ชันการคำนวณ
+# ============================================================
+
+def convert_cube_to_cylinder(fc_cube_ksc: float) -> float:
+    """
+    แปลงกำลังอัดคอนกรีตจาก Cube เป็น Cylinder
+    fc_cylinder ≈ 0.8 × fc_cube (โดยประมาณ)
+    
+    Parameters:
+        fc_cube_ksc: กำลังอัดคอนกรีต Cube (ksc)
+    
+    Returns:
+        กำลังอัดคอนกรีต Cylinder (ksc)
+    """
+    return 0.8 * fc_cube_ksc
+
+
+def calculate_concrete_modulus(fc_cylinder_ksc: float) -> float:
+    """
+    คำนวณ Modulus of Elasticity ของคอนกรีต (Ec)
+    ตามสูตร ACI: Ec = 57,000 × √(f'c) (psi)
+    
+    Parameters:
+        fc_cylinder_ksc: กำลังอัดคอนกรีต Cylinder (ksc)
+    
+    Returns:
+        Ec ในหน่วย psi
+    """
+    # แปลง ksc เป็น psi (1 ksc = 14.223 psi)
+    fc_psi = fc_cylinder_ksc * 14.223
+    
+    # คำนวณ Ec ตาม ACI 318
+    ec_psi = 57000 * math.sqrt(fc_psi)
+    
+    return ec_psi
+
+
+def estimate_modulus_of_rupture(fc_cylinder_ksc: float) -> float:
+    """
+    ประมาณค่า Modulus of Rupture (Sc) จากกำลังอัดคอนกรีต
+    ตามสูตร: Sc = (7.5 ถึง 12) × √(f'c) (ACI 318, หน่วย psi)
+    
+    Parameters:
+        fc_cylinder_ksc: กำลังอัดคอนกรีต Cylinder (ksc)
+    
+    Returns:
+        Sc ในหน่วย psi (ใช้ค่า 10 × √f'c)
+    """
+    # แปลง ksc เป็น psi
+    fc_psi = fc_cylinder_ksc * 14.223
+    
+    # ใช้สูตร: Sc = 10 × √f'c (ค่าเหมาะสมสำหรับคอนกรีตถนน)
+    sc_psi = 10.0 * math.sqrt(fc_psi)
+    
+    return sc_psi
+
+
+def get_zr_value(reliability: float) -> float:
+    """
+    หาค่า ZR จากตาราง AASHTO ตามระดับความเชื่อมั่น
+    
+    Parameters:
+        reliability: ระดับความเชื่อมั่น (%)
+    
+    Returns:
+        ค่า ZR (Standard Normal Deviate)
+    """
+    return ZR_TABLE.get(int(reliability), -1.282)
+
+
+def calculate_aashto_rigid_w18(
+    d_inch: float,
+    delta_psi: float,
+    pt: float,
+    zr: float,
+    so: float,
+    sc_psi: float,
+    cd: float,
+    j: float,
+    ec_psi: float,
+    k_pci: float
+) -> tuple:
+    """
+    คำนวณ ESAL (W18) ที่รองรับได้ตามสมการ AASHTO 1993 สำหรับ Rigid Pavement
+    
+    สมการ AASHTO 1993:
+    log10(W18) = ZR × So + 7.35 × log10(D+1) - 0.06 
+                 + log10(ΔPSI/(4.5-1.5)) / (1 + 1.624×10^7 / (D+1)^8.46)
+                 + (4.22 - 0.32×Pt) × log10[(Sc×Cd×(D^0.75-1.132)) / (215.63×J×(D^0.75 - 18.42/(Ec/k)^0.25))]
+    
+    Parameters:
+        d_inch: ความหนาแผ่นพื้นคอนกรีต (นิ้ว)
+        delta_psi: การสูญเสียค่า Serviceability (ΔPSI = 4.5 - Pt)
+        pt: Terminal Serviceability
+        zr: Standard Normal Deviate
+        so: Overall Standard Deviation
+        sc_psi: Modulus of Rupture (psi)
+        cd: Drainage Coefficient
+        j: Load Transfer Coefficient
+        ec_psi: Modulus of Elasticity ของคอนกรีต (psi)
+        k_pci: Effective Modulus of Subgrade Reaction (pci)
+    
+    Returns:
+        tuple: (log10_w18, w18)
+    """
+    
+    # พจน์ที่ 1: ZR × So
+    term1 = zr * so
+    
+    # พจน์ที่ 2: 7.35 × log10(D+1) - 0.06
+    term2 = 7.35 * math.log10(d_inch + 1) - 0.06
+    
+    # พจน์ที่ 3: การสูญเสีย Serviceability
+    # log10(ΔPSI/(4.5-1.5)) / (1 + 1.624×10^7 / (D+1)^8.46)
+    numerator3 = math.log10(delta_psi / (4.5 - 1.5))
+    denominator3 = 1 + (1.624e7 / ((d_inch + 1) ** 8.46))
+    term3 = numerator3 / denominator3
+    
+    # พจน์ที่ 4: กำลังของคอนกรีตและฐานราก
+    # (4.22 - 0.32×Pt) × log10[(Sc×Cd×(D^0.75-1.132)) / (215.63×J×(D^0.75 - 18.42/(Ec/k)^0.25))]
+    
+    # คำนวณ D^0.75
+    d_power = d_inch ** 0.75
+    
+    # คำนวณตัวเศษ: Sc × Cd × (D^0.75 - 1.132)
+    numerator4 = sc_psi * cd * (d_power - 1.132)
+    
+    # คำนวณตัวส่วน: 215.63 × J × (D^0.75 - 18.42/(Ec/k)^0.25)
+    ec_k_ratio = ec_psi / k_pci
+    denominator4 = 215.63 * j * (d_power - 18.42 / (ec_k_ratio ** 0.25))
+    
+    # ตรวจสอบว่าค่าต้องเป็นบวก
+    if numerator4 <= 0 or denominator4 <= 0:
+        return (float('-inf'), 0)
+    
+    inner_term = numerator4 / denominator4
+    
+    if inner_term <= 0:
+        return (float('-inf'), 0)
+    
+    term4 = (4.22 - 0.32 * pt) * math.log10(inner_term)
+    
+    # รวมทุกพจน์
+    log10_w18 = term1 + term2 + term3 + term4
+    
+    # คำนวณ W18
+    w18 = 10 ** log10_w18
+    
+    return (log10_w18, w18)
+
+
+def check_design(w18_required: float, w18_capacity: float) -> tuple:
+    """
+    ตรวจสอบว่าความหนาที่กำหนดรองรับ ESAL ได้หรือไม่
+    
+    Parameters:
+        w18_required: ESAL ที่ต้องการรองรับ
+        w18_capacity: ESAL ที่รองรับได้
+    
+    Returns:
+        tuple: (ผลการตรวจสอบ (bool), อัตราส่วน)
+    """
+    ratio = w18_capacity / w18_required if w18_required > 0 else float('inf')
+    passed = w18_capacity >= w18_required
+    return (passed, ratio)
+
+
+def create_pavement_structure_figure(layers_data: list, concrete_thickness_cm: float = None):
+    """
+    สร้างรูปโครงสร้างชั้นทาง
+    
+    Parameters:
+        layers_data: รายการข้อมูลชั้นวัสดุ [{"name": ..., "thickness_cm": ..., "E_MPa": ...}, ...]
+        concrete_thickness_cm: ความหนาแผ่นคอนกรีต (ซม.) ถ้ามี
+    
+    Returns:
+        matplotlib figure
+    """
+    # แปลงชื่อวัสดุเป็นภาษาอังกฤษสำหรับแสดงในรูป
+    THAI_TO_ENG = {
+        "ผิวทางลาดยาง AC": "AC Surface",
+        "ผิวทางลาดยาง PMA": "PMA Surface",
+        "พื้นทางซีเมนต์ CTB": "Cement Treated Base",
+        "หินคลุกผสมซีเมนต์ UCS 24.5 ksc": "Soil Cement",
+        "หินคลุก CBR 80%": "Crushed Rock Base",
+        "ดินซีเมนต์ UCS 17.5 ksc": "Soil Cement",
+        "วัสดุหมุนเวียน (Recycling)": "Recycled Material",
+        "รองพื้นทางวัสดุมวลรวม CBR 25%": "Aggregate Subbase",
+        "วัสดุคัดเลือก ก": "Selected Material",
+        "ดินถมคันทาง / ดินเดิม": "Subgrade",
+        "กำหนดเอง...": "Custom Material",
+        "แผ่นคอนกรีต": "Concrete Slab",
+        "Concrete Slab": "Concrete Slab",
+    }
+    
+    # สีสำหรับแต่ละประเภทวัสดุ
+    LAYER_COLORS = {
+        "ผิวทางลาดยาง AC": "#2C3E50",
+        "ผิวทางลาดยาง PMA": "#1A252F",
+        "พื้นทางซีเมนต์ CTB": "#7F8C8D",
+        "หินคลุกผสมซีเมนต์ UCS 24.5 ksc": "#95A5A6",
+        "หินคลุก CBR 80%": "#BDC3C7",
+        "ดินซีเมนต์ UCS 17.5 ksc": "#AAB7B8",
+        "วัสดุหมุนเวียน (Recycling)": "#85929E",
+        "รองพื้นทางวัสดุมวลรวม CBR 25%": "#D5DBDB",
+        "วัสดุคัดเลือก ก": "#E8DAEF",
+        "ดินถมคันทาง / ดินเดิม": "#F5CBA7",
+        "กำหนดเอง...": "#FADBD8",
+        "Concrete Slab": "#5DADE2",
+    }
+    
+    # กรองเฉพาะชั้นที่มีความหนา > 0
+    valid_layers = [l for l in layers_data if l.get("thickness_cm", 0) > 0]
+    
+    # เพิ่มชั้นคอนกรีตถ้ามี
+    all_layers = []
+    if concrete_thickness_cm and concrete_thickness_cm > 0:
+        all_layers.append({
+            "name": "Concrete Slab",
+            "thickness_cm": concrete_thickness_cm,
+            "E_MPa": None
+        })
+    all_layers.extend(valid_layers)
+    
+    if not all_layers:
+        return None
+    
+    # คำนวณความหนารวม
+    total_thickness = sum(l.get("thickness_cm", 0) for l in all_layers)
+    
+    # ใช้ scale factor เพื่อให้ชั้นบางๆ ยังมองเห็นได้
+    min_display_height = 8  # ความสูงขั้นต่ำในการแสดงผล
+    
+    # สร้าง figure
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # กำหนดขนาดรูป
+    width = 3  # ความกว้างของชั้นทาง
+    x_center = 6  # ตำแหน่ง x กึ่งกลาง
+    x_start = x_center - width / 2
+    
+    # คำนวณความสูงที่ใช้แสดงผล
+    display_heights = []
+    for layer in all_layers:
+        thickness = layer.get("thickness_cm", 0)
+        display_h = max(thickness, min_display_height)
+        display_heights.append(display_h)
+    
+    total_display = sum(display_heights)
+    y_current = total_display
+    
+    # วาดแต่ละชั้น
+    for i, layer in enumerate(all_layers):
+        thickness = layer.get("thickness_cm", 0)
+        name = layer.get("name", f"Layer {i+1}")
+        e_mpa = layer.get("E_MPa", None)
+        display_h = display_heights[i]
+        
+        if thickness <= 0:
+            continue
+        
+        # หาสี
+        color = LAYER_COLORS.get(name, "#CCCCCC")
+        
+        # วาดสี่เหลี่ยม
+        y_bottom = y_current - display_h
+        rect = patches.Rectangle(
+            (x_start, y_bottom), 
+            width, 
+            display_h,
+            linewidth=2,
+            edgecolor='black',
+            facecolor=color
+        )
+        ax.add_patch(rect)
+        
+        # เพิ่มข้อความ
+        y_center_pos = y_bottom + display_h / 2
+        
+        # แปลงชื่อเป็นภาษาอังกฤษ
+        display_name = THAI_TO_ENG.get(name, name)
+        
+        # กำหนดสีข้อความตามสีพื้นหลัง
+        is_dark = name in ["ผิวทางลาดยาง AC", "ผิวทางลาดยาง PMA", "Concrete Slab", 
+                          "พื้นทางซีเมนต์ CTB", "หินคลุกผสมซีเมนต์ UCS 24.5 ksc",
+                          "วัสดุหมุนเวียน (Recycling)"]
+        text_color = 'white' if is_dark else 'black'
+        
+        # ข้อความในกล่อง (ความหนา)
+        ax.text(x_center, y_center_pos, f"{thickness} cm",
+                ha='center', va='center', fontsize=11, fontweight='bold', color=text_color)
+        
+        # ข้อความด้านซ้าย (ชื่อวัสดุ)
+        ax.text(x_start - 0.5, y_center_pos, display_name,
+                ha='right', va='center', fontsize=10, fontweight='bold', color='black')
+        
+        # ข้อความด้านขวา (E value)
+        if e_mpa:
+            ax.text(x_start + width + 0.5, y_center_pos, f"E = {e_mpa:,} MPa",
+                    ha='left', va='center', fontsize=10, color='#0066CC')
+        
+        y_current = y_bottom
+    
+    # วาดเส้นบอกขนาดรวมด้านขวาสุด
+    ax.annotate('', xy=(x_start + width + 3.5, total_display), 
+                xytext=(x_start + width + 3.5, 0),
+                arrowprops=dict(arrowstyle='<->', color='red', lw=2))
+    ax.text(x_start + width + 4, total_display / 2, f"Total\n{total_thickness} cm",
+            ha='left', va='center', fontsize=12, color='red', fontweight='bold')
+    
+    # ตั้งค่า axes
+    margin = 10
+    ax.set_xlim(0, 14)
+    ax.set_ylim(-margin, total_display + margin)
+    ax.axis('off')
+    
+    # หัวข้อ
+    ax.set_title('Pavement Structure', 
+                 fontsize=18, fontweight='bold', pad=20)
+    
+    # เพิ่มข้อความความหนารวมด้านล่าง
+    ax.text(x_center, -margin + 4, 
+            f"Total Pavement Thickness: {total_thickness} cm",
+            ha='center', va='center', fontsize=13, fontweight='bold',
+            bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.9, edgecolor='orange'))
+    
+    plt.tight_layout()
+    
+    return fig
+
+
+def save_figure_to_bytes(fig):
+    """บันทึก matplotlib figure เป็น bytes สำหรับดาวน์โหลด"""
+    buf = BytesIO()
+    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', 
+                facecolor='white', edgecolor='none')
+    buf.seek(0)
+    return buf
+
+
+# ============================================================
+# ส่วนที่ 3: ฟังก์ชันสร้างรายงาน Word
+# ============================================================
+
+def create_word_report(
+    pavement_type: str,
+    inputs: dict,
+    calculated_values: dict,
+    comparison_results: list,
+    selected_d: float,
+    main_result: tuple,
+    layers_data: list = None
+) -> BytesIO:
+    """
+    สร้างรายงานการคำนวณในรูปแบบไฟล์ Word (.docx)
+    ใช้ python-docx library
+    """
+    try:
+        from docx import Document
+        from docx.shared import Inches, Pt, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+    except ImportError:
+        st.error("กรุณาติดตั้ง python-docx: pip install python-docx")
+        return None
+    
+    # สร้างเอกสารใหม่
+    doc = Document()
+    
+    # ตั้งค่าฟอนต์ภาษาไทย
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'TH Sarabun New'
+    font.size = Pt(14)
+    
+    # หัวข้อเอกสาร
+    title = doc.add_heading('รายการคำนวณออกแบบความหนาถนนคอนกรีต', 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    subtitle = doc.add_paragraph('ตามวิธี AASHTO 1993')
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # ข้อมูลทั่วไป
+    doc.add_heading('1. ข้อมูลทั่วไป', level=1)
+    doc.add_paragraph(f'ประเภทถนน: {pavement_type}')
+    doc.add_paragraph(f'วันที่คำนวณ: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
+    
+    # ตารางชั้นโครงสร้างทาง
+    if layers_data and len(layers_data) > 0:
+        doc.add_heading('2. ชั้นโครงสร้างทาง (Pavement Layers)', level=1)
+        
+        table_layers = doc.add_table(rows=1, cols=4)
+        table_layers.style = 'Table Grid'
+        hdr_layers = table_layers.rows[0].cells
+        hdr_layers[0].text = 'ลำดับ'
+        hdr_layers[1].text = 'ชนิดวัสดุ'
+        hdr_layers[2].text = 'ความหนา (ซม.)'
+        hdr_layers[3].text = 'Modulus E (MPa)'
+        
+        for i, layer in enumerate(layers_data):
+            row_cells = table_layers.add_row().cells
+            row_cells[0].text = str(i + 1)
+            row_cells[1].text = layer.get('name', f'Layer {i+1}')
+            row_cells[2].text = f"{layer.get('thickness_cm', 0)}"
+            row_cells[3].text = f"{layer.get('E_MPa', 0):,}"
+        
+        doc.add_paragraph('')  # เว้นบรรทัด
+    
+    # ข้อมูลนำเข้า
+    doc.add_heading('3. ข้อมูลนำเข้า (Input Parameters)', level=1)
+    
+    table1 = doc.add_table(rows=1, cols=4)
+    table1.style = 'Table Grid'
+    hdr_cells = table1.rows[0].cells
+    hdr_cells[0].text = 'พารามิเตอร์'
+    hdr_cells[1].text = 'สัญลักษณ์'
+    hdr_cells[2].text = 'ค่า'
+    hdr_cells[3].text = 'หน่วย'
+    
+    input_data = [
+        ('ESAL ออกแบบ', 'W₁₈', f"{inputs['w18_design']:,.0f}", 'ESALs'),
+        ('Terminal Serviceability', 'Pt', f"{inputs['pt']:.1f}", '-'),
+        ('Reliability', 'R', f"{inputs['reliability']:.0f}", '%'),
+        ('Standard Deviation', 'So', f"{inputs['so']:.2f}", '-'),
+        ('Modulus of Subgrade Reaction', 'k_eff', f"{inputs['k_eff']:,.0f}", 'pci'),
+        ('Loss of Support', 'LS', f"{inputs.get('ls', 1.0):.1f}", '-'),
+        ('กำลังคอนกรีต', "f'c", f"{inputs['fc_cube']:.0f} Cube ({int(inputs['fc_cube']*0.8)} Cyl.)", 'ksc'),
+        ('Modulus of Rupture', 'Sc', f"{inputs['sc']:.0f}", 'psi'),
+        ('Load Transfer Coefficient', 'J', f"{inputs['j']:.1f}", '-'),
+        ('Drainage Coefficient', 'Cd', f"{inputs['cd']:.1f}", '-'),
+    ]
+    
+    for param, symbol, value, unit in input_data:
+        row_cells = table1.add_row().cells
+        row_cells[0].text = param
+        row_cells[1].text = symbol
+        row_cells[2].text = value
+        row_cells[3].text = unit
+    
+    # ค่าที่คำนวณได้
+    doc.add_heading('4. ค่าที่คำนวณได้ (Calculated Values)', level=1)
+    
+    table2 = doc.add_table(rows=1, cols=4)
+    table2.style = 'Table Grid'
+    hdr_cells2 = table2.rows[0].cells
+    hdr_cells2[0].text = 'พารามิเตอร์'
+    hdr_cells2[1].text = 'สัญลักษณ์'
+    hdr_cells2[2].text = 'ค่า'
+    hdr_cells2[3].text = 'หน่วย'
+    
+    calc_data = [
+        ('Modulus of Elasticity', 'Ec', f"{calculated_values['ec']:,.0f}", 'psi'),
+        ('Standard Normal Deviate', 'ZR', f"{calculated_values['zr']:.3f}", '-'),
+        ('การสูญเสีย Serviceability', 'ΔPSI', f"{calculated_values['delta_psi']:.1f}", '-'),
+    ]
+    
+    for param, symbol, value, unit in calc_data:
+        row_cells = table2.add_row().cells
+        row_cells[0].text = param
+        row_cells[1].text = symbol
+        row_cells[2].text = value
+        row_cells[3].text = unit
+    
+    # สมการ AASHTO 1993
+    doc.add_heading('5. สมการออกแบบ AASHTO 1993', level=1)
+    
+    equation_text = """
+    log₁₀(W₁₈) = ZR × So + 7.35 × log₁₀(D+1) - 0.06 
+                 + log₁₀(ΔPSI/(4.5-1.5)) / (1 + 1.624×10⁷/(D+1)^8.46)
+                 + (4.22 - 0.32×Pt) × log₁₀[(Sc×Cd×(D^0.75-1.132))/(215.63×J×(D^0.75 - 18.42/(Ec/k)^0.25))]
+    """
+    doc.add_paragraph(equation_text)
+    
+    # ผลการเปรียบเทียบ
+    doc.add_heading('6. ผลการเปรียบเทียบความหนาต่างๆ', level=1)
+    
+    table3 = doc.add_table(rows=1, cols=5)
+    table3.style = 'Table Grid'
+    hdr_cells3 = table3.rows[0].cells
+    hdr_cells3[0].text = 'D (นิ้ว)'
+    hdr_cells3[1].text = 'log₁₀(W₁₈)'
+    hdr_cells3[2].text = 'W₁₈ รองรับได้'
+    hdr_cells3[3].text = 'อัตราส่วน'
+    hdr_cells3[4].text = 'ผลการตรวจสอบ'
+    
+    for result in comparison_results:
+        row_cells = table3.add_row().cells
+        row_cells[0].text = f"{result['d']:.0f}"
+        row_cells[1].text = f"{result['log_w18']:.4f}"
+        row_cells[2].text = f"{result['w18']:,.0f}"
+        row_cells[3].text = f"{result['ratio']:.2f}"
+        row_cells[4].text = "ผ่าน ✓" if result['passed'] else "ไม่ผ่าน ✗"
+    
+    # สรุปผล
+    doc.add_heading('7. สรุปผลการออกแบบ', level=1)
+    
+    passed, ratio = main_result
+    status = "ผ่านเกณฑ์ ✓" if passed else "ไม่ผ่านเกณฑ์ ✗"
+    
+    summary = f"""
+    ความหนาที่เลือก: {selected_d:.0f} นิ้ว ({selected_d * 2.54:.1f} ซม.)
+    ESAL ที่ต้องการ: {inputs['w18_design']:,.0f} ESALs
+    ESAL ที่รองรับได้: {[r for r in comparison_results if r['d'] == selected_d][0]['w18'] if any(r['d'] == selected_d for r in comparison_results) else 'N/A':,.0f} ESALs
+    อัตราส่วน: {ratio:.2f}
+    ผลการตรวจสอบ: {status}
+    """
+    doc.add_paragraph(summary)
+    
+    # หมายเหตุ
+    doc.add_heading('8. หมายเหตุ', level=1)
+    notes = """
+    - การคำนวณนี้ใช้หลักการตามคู่มือ AASHTO Guide for Design of Pavement Structures (1993)
+    - สมการ: log₁₀(W₁₈) รวม term (D^0.75 - 1.132) ในตัวเศษ
+    - ค่า J สำหรับ JPCP + Dowel + Tied Shoulder = 2.7, JPCP + Dowel (AC Shoulder) = 3.2
+    - การแปลงกำลังคอนกรีต: f'c (cylinder) ≈ 0.8 × f'c (cube)
+    - Ec = 57,000 × √f'c (psi) ตาม ACI 318
+    - Sc ≈ 10 × √f'c (psi)
+    """
+    doc.add_paragraph(notes)
+    
+    # บันทึกไฟล์ลง BytesIO
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    
+    return buffer
+
+
+# ============================================================
+# ส่วนที่ 4: Streamlit UI
+# ============================================================
+
+def main():
+    # ตั้งค่าหน้าเว็บ
+    st.set_page_config(
+        page_title="AASHTO 1993 Rigid Pavement Design",
+        page_icon="🛣️",
+        layout="wide"
+    )
+    
+    # หัวข้อหลัก
+    st.title("🛣️ การออกแบบความหนาถนนคอนกรีต")
+    st.subheader("ตามวิธี AASHTO 1993 (Rigid Pavement Design)")
+    
+    st.markdown("---")
+    
+    # แบ่งคอลัมน์
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.header("📥 ข้อมูลนำเข้า (Input)")
+        
+        # เลือกประเภทถนน
+        pavement_type = st.selectbox(
+            "ประเภทถนนคอนกรีต",
+            options=list(J_VALUES.keys()),
+            index=0,
+            help="JPCP = Jointed Plain Concrete Pavement, CRCP = Continuously Reinforced Concrete Pavement"
+        )
+        
+        st.markdown("---")
+        
+        # ชั้นโครงสร้างทาง (Pavement Layers)
+        st.subheader("🔶 ชั้นโครงสร้างทาง (Pavement Layers)")
+        
+        # ตารางค่า Modulus ตามประเภทวัสดุ (ตามข้อมูลอาจารย์)
+        MATERIAL_MODULUS = {
+            "ผิวทางลาดยาง AC": 2500,
+            "ผิวทางลาดยาง PMA": 3700,
+            "พื้นทางซีเมนต์ CTB": 1200,
+            "หินคลุกผสมซีเมนต์ UCS 24.5 ksc": 850,
+            "หินคลุก CBR 80%": 350,
+            "ดินซีเมนต์ UCS 17.5 ksc": 350,
+            "วัสดุหมุนเวียน (Recycling)": 850,
+            "รองพื้นทางวัสดุมวลรวม CBR 25%": 150,
+            "วัสดุคัดเลือก ก": 76,
+            "ดินถมคันทาง / ดินเดิม": 100,
+            "กำหนดเอง...": 100,
+        }
+        
+        # รายการวัสดุสำหรับ dropdown
+        material_options = list(MATERIAL_MODULUS.keys())
+        
+        # จำนวนชั้นวัสดุ
+        num_layers = st.slider(
+            "จำนวนชั้นวัสดุใต้แผ่นคอนกรีต",
+            min_value=1,
+            max_value=6,
+            value=5,
+            help="เลือกจำนวนชั้นวัสดุ 1-6 ชั้น"
+        )
+        
+        # ค่า Default สำหรับแต่ละชั้น
+        default_layers = [
+            {"name": "ผิวทางลาดยาง AC", "thickness_cm": 5},
+            {"name": "พื้นทางซีเมนต์ CTB", "thickness_cm": 20},
+            {"name": "หินคลุก CBR 80%", "thickness_cm": 15},
+            {"name": "รองพื้นทางวัสดุมวลรวม CBR 25%", "thickness_cm": 25},
+            {"name": "วัสดุคัดเลือก ก", "thickness_cm": 30},
+            {"name": "ดินถมคันทาง / ดินเดิม", "thickness_cm": 0},
+        ]
+        
+        # เก็บข้อมูลชั้นวัสดุ
+        layers_data = []
+        
+        with st.expander("📊 ตารางค่า Modulus อ้างอิง", expanded=False):
+            st.markdown("""
+            | วัสดุชั้นทาง | MR (MPa) |
+            |-------------|----------|
+            | ผิวทางลาดยาง AC | 2,500 |
+            | ผิวทางลาดยาง PMA | 3,700 |
+            | พื้นทางซีเมนต์ CTB | 1,200 |
+            | หินคลุกผสมซีเมนต์ UCS 24.5 ksc | 850 |
+            | หินคลุก CBR 80% | 350 |
+            | ดินซีเมนต์ UCS 17.5 ksc | 350 |
+            | วัสดุหมุนเวียน (Recycling) | 850 |
+            | รองพื้นทางวัสดุมวลรวม CBR 25% | 150 |
+            | วัสดุคัดเลือก ก | 76 |
+            | ดินถมคันทาง / ดินเดิม | 100 |
+            """)
+        
+        for i in range(num_layers):
+            st.markdown(f"**ชั้นที่ {i+1}**")
+            col_a, col_b, col_c = st.columns([2, 1, 1])
+            
+            # หา default index สำหรับ dropdown
+            default_name = default_layers[i]["name"] if i < len(default_layers) else "กำหนดเอง..."
+            default_index = material_options.index(default_name) if default_name in material_options else len(material_options) - 1
+            
+            with col_a:
+                layer_name = st.selectbox(
+                    f"เลือกวัสดุ",
+                    options=material_options,
+                    index=default_index,
+                    key=f"layer_name_{i}"
+                )
+            
+            with col_b:
+                layer_thickness = st.number_input(
+                    f"ความหนา (ซม.)",
+                    min_value=0,
+                    max_value=100,
+                    value=default_layers[i]["thickness_cm"] if i < len(default_layers) else 20,
+                    key=f"layer_thick_{i}"
+                )
+            
+            # หาค่า Modulus จากวัสดุที่เลือก
+            recommended_modulus = MATERIAL_MODULUS.get(layer_name, 100)
+            
+            with col_c:
+                # ใช้ key ที่รวม layer_name เพื่อให้ reset เมื่อเปลี่ยนวัสดุ
+                layer_modulus = st.number_input(
+                    f"E (MPa)",
+                    min_value=10,
+                    max_value=10000,
+                    value=recommended_modulus,
+                    key=f"layer_E_{i}_{layer_name}",
+                    help=f"ค่าแนะนำ: {recommended_modulus:,} MPa"
+                )
+            
+            layers_data.append({
+                "name": layer_name,
+                "thickness_cm": layer_thickness,
+                "E_MPa": layer_modulus
+            })
+        
+        # แสดงรูปโครงสร้างชั้นทาง
         st.markdown("**📐 รูปโครงสร้างชั้นทาง**")
         
         # สร้างรูป
@@ -435,3 +1158,29 @@
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาด: {str(e)}")
                     st.info("กรุณาติดตั้ง python-docx: `pip install python-docx`")
+    
+    # ============================================================
+    # ส่วนอ้างอิง
+    # ============================================================
+    
+    st.markdown("---")
+    st.header("📚 อ้างอิง")
+    
+    st.markdown("""
+    **เอกสารอ้างอิง:**
+    1. AASHTO (1993). *AASHTO Guide for Design of Pavement Structures*. American Association of State Highway and Transportation Officials.
+    2. Huang, Y.H. (2004). *Pavement Analysis and Design*. Pearson Prentice Hall.
+    3. ACI 318-19 (2019). *Building Code Requirements for Structural Concrete*. American Concrete Institute.
+    
+    **หมายเหตุ:**
+    - โปรแกรมนี้พัฒนาเพื่อใช้ในการเรียนการสอน
+    - การออกแบบจริงควรพิจารณาปัจจัยอื่นๆ ร่วมด้วย เช่น สภาพแวดล้อม การก่อสร้าง และการบำรุงรักษา
+    """)
+    
+    # Footer
+    st.markdown("---")
+    st.caption("พัฒนาโดย: ภาควิชาครุศาสตร์โยธา มจพ. | AASHTO 1993 Rigid Pavement Design Tool")
+
+
+if __name__ == "__main__":
+    main()
