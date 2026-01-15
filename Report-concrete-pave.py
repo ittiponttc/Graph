@@ -912,7 +912,7 @@ def main():
         with st.expander("📊 ตารางค่า Load Transfer Coefficient (J)"):
             st.markdown("""
             | ประเภทถนน | J (AC Shoulder_Yes) |J (AC Shoulder_No) | J (Tied P.C.C_Yes)|J (Tied P.C.C-No)| 
-            |-------------|-----------|-----------|
+            |-------------|-----------|-----------|-----------|-----------|
             |1. JRCP/JPCP |3.2 |3.8-4.4| 2.5-3.4 |3.6-4.2| 
             |2. CRCP |2.9-3.2 | N/A | 2.3-2.9 | N/A |
             
