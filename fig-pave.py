@@ -428,7 +428,7 @@ def create_word_report(
     style = doc.styles['Normal']
     font = style.font
     font.name = 'TH Sarabun New'
-    font.size = Pt(14)
+    font.size = Pt(15)
     
     # หัวข้อเอกสาร
     title = doc.add_heading('รายการคำนวณออกแบบความหนาถนนคอนกรีต', 0)
@@ -481,7 +481,7 @@ def create_word_report(
         ('Standard Deviation', 'So', f"{inputs['so']:.2f}", '-'),
         ('Modulus of Subgrade Reaction', 'k_eff', f"{inputs['k_eff']:,.0f}", 'pci'),
         ('Loss of Support', 'LS', f"{inputs.get('ls', 1.0):.1f}", '-'),
-        ('กำลังคอนกรีต', "f'c", f"{inputs['fc_cube']:.0f} Cube ({int(inputs['fc_cube']*0.8)} Cyl.)", 'ksc'),
+        ('กำลังคอนกรีต', "f'c", f"{inputs['fc_cube']:.0f} Cube ({int(inputs['fc_cube']*0.833)} Cyl.)", 'ksc'),
         ('Modulus of Rupture', 'Sc', f"{inputs['sc']:.0f}", 'psi'),
         ('Load Transfer Coefficient', 'J', f"{inputs['j']:.1f}", '-'),
         ('Drainage Coefficient', 'Cd', f"{inputs['cd']:.1f}", '-'),
@@ -555,7 +555,7 @@ def create_word_report(
     status = "ผ่านเกณฑ์ ✓" if passed else "ไม่ผ่านเกณฑ์ ✗"
     
     summary = f"""
-    ความหนาที่เลือก: {selected_d:.0f} นิ้ว ({selected_d * 2.54:.1f} ซม.)
+    ความหนาที่เลือก: {selected_d:.0f} นิ้ว ({selected_d * 2.5:.1f} ซม.)
     ESAL ที่ต้องการ: {inputs['w18_design']:,.0f} ESALs
     ESAL ที่รองรับได้: {[r for r in comparison_results if r['d'] == selected_d][0]['w18'] if any(r['d'] == selected_d for r in comparison_results) else 'N/A':,.0f} ESALs
     อัตราส่วน: {ratio:.2f}
