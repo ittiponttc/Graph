@@ -746,7 +746,18 @@ def main():
             format="%d",
             help="จำนวน Equivalent Single Axle Load (18 kip) ตลอดอายุการใช้งาน"
         )
+         # แสดงหน่วยคำพูดภาษาไทย
+        if w18_design >= 1_000_000:
+            esal_text = f"{w18_design / 1_000_000:,.2f} ล้าน"
+        elif w18_design >= 100_000:
+            esal_text = f"{w18_design / 100_000:,.2f} แสน"
+        elif w18_design >= 10_000:
+            esal_text = f"{w18_design / 10_000:,.2f} หมื่น"
+        else:
+            esal_text = f"{w18_design:,.0f}"
         
+        st.markdown(f"<h3 style='color: #1E88E5; margin-top: -10px;'>{esal_text}</h3>", 
+                    unsafe_allow_html=True)
         st.markdown("---")
         
         # 2. Serviceability
@@ -765,20 +776,8 @@ def main():
         st.info(f"ΔPSI = 4.5 - {pt:.1f} = **{delta_psi:.1f}**")
          
         st.markdown("---")
+        )
        
-        
-        # แสดงหน่วยคำพูดภาษาไทย
-        if w18_design >= 1_000_000:
-            esal_text = f"{w18_design / 1_000_000:,.2f} ล้าน"
-        elif w18_design >= 100_000:
-            esal_text = f"{w18_design / 100_000:,.2f} แสน"
-        elif w18_design >= 10_000:
-            esal_text = f"{w18_design / 10_000:,.2f} หมื่น"
-        else:
-            esal_text = f"{w18_design:,.0f}"
-        
-        st.markdown(f"<h3 style='color: #1E88E5; margin-top: -10px;'>{esal_text}</h3>", 
-                    unsafe_allow_html=True)
         
         st.markdown("---")
         # 3. Reliability
