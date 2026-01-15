@@ -1,7 +1,7 @@
 """
 โปรแกรมออกแบบและตรวจสอบความหนาถนนคอนกรีต (Rigid Pavement)
 ตามวิธี AASHTO 1993
-รองรับทั้ง JPCP (Jointed Plain Concrete Pavement) และ CRCP (Continuously Reinforced Concrete Pavement)
+รองรับทั้ง JPCP (Jointed Plain Concrete Pavement) JRCP (Jointed Reinforced Concrete Pavement)และ CRCP (Continuously Reinforced Concrete Pavement)
 
 พัฒนาสำหรับใช้ในการเรียนการสอน
 ภาควิชาครุศาสตร์โยธา มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ
@@ -1198,7 +1198,7 @@ def main():
     
     # Footer
     st.markdown("---")
-    st.caption("พัฒนาโดย: ภาควิชาครุศาสตร์โยธา มจพ. | AASHTO 1993 Rigid Pavement Design Tool")
+    st.caption("พัฒนาโดย: รศ.ดร.อิทธิพล มีผล // ภาควิชาครุศาสตร์โยธา มจพ. | AASHTO 1993 Rigid Pavement Design Tool")
 
 
 if __name__ == "__main__":
