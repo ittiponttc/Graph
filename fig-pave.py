@@ -42,10 +42,10 @@ ZR_TABLE = {
 # ค่า Load Transfer Coefficient (J) ตามประเภทถนนและการถ่ายแรง
 # อ้างอิง: AASHTO 1993 Guide, Table 2.6
 J_VALUES = {
-    "JPCP + Dowel + Tied Shoulder": 2.7,
+    "JPCP + Dowel + Tied Shoulder": 2.8,
     "JPCP + Dowel Bar (AC Shoulder)": 3.2,
     "JPCP ไม่มี Dowel Bar": 3.8,
-    "CRCP + Tied Shoulder": 2.3,
+    "CRCP + Tied Shoulder": 2.5,
     "CRCP (AC Shoulder)": 2.9
 }
 
@@ -59,7 +59,7 @@ CD_DEFAULT = 1.0
 def convert_cube_to_cylinder(fc_cube_ksc: float) -> float:
     """
     แปลงกำลังอัดคอนกรีตจาก Cube เป็น Cylinder
-    fc_cylinder ≈ 0.8 × fc_cube (โดยประมาณ)
+    fc_cylinder ≈ 0.833 × fc_cube (โดยประมาณ)
     
     Parameters:
         fc_cube_ksc: กำลังอัดคอนกรีต Cube (ksc)
@@ -67,7 +67,7 @@ def convert_cube_to_cylinder(fc_cube_ksc: float) -> float:
     Returns:
         กำลังอัดคอนกรีต Cylinder (ksc)
     """
-    return 0.8 * fc_cube_ksc
+    return 0.833 * fc_cube_ksc
 
 
 def calculate_concrete_modulus(fc_cylinder_ksc: float) -> float:
@@ -104,7 +104,7 @@ def estimate_modulus_of_rupture(fc_cylinder_ksc: float) -> float:
     # แปลง ksc เป็น psi
     fc_psi = fc_cylinder_ksc * 14.223
     
-    # ใช้สูตร: Sc = 10 × √f'c (ค่าเหมาะสมสำหรับคอนกรีตถนน)
+    # ใช้สูตร: Sc = 10 × √f'c (DOH กำหนดให้ใช้ไม่เกิน 600 psi)
     sc_psi = 10.0 * math.sqrt(fc_psi)
     
     return sc_psi
@@ -569,7 +569,7 @@ def create_word_report(
     - การคำนวณนี้ใช้หลักการตามคู่มือ AASHTO Guide for Design of Pavement Structures (1993)
     - สมการ: log₁₀(W₁₈) รวม term (D^0.75 - 1.132) ในตัวเศษ
     - ค่า J สำหรับ JPCP + Dowel + Tied Shoulder = 2.7, JPCP + Dowel (AC Shoulder) = 3.2
-    - การแปลงกำลังคอนกรีต: f'c (cylinder) ≈ 0.8 × f'c (cube)
+    - การแปลงกำลังคอนกรีต: f'c (cylinder) ≈ 0.833 × f'c (cube)
     - Ec = 57,000 × √f'c (psi) ตาม ACI 318
     - Sc ≈ 10 × √f'c (psi)
     """
@@ -922,9 +922,9 @@ def main():
             st.markdown("""
             | ประเภทถนน | J (Tied Shoulder) | J (AC Shoulder) |
             |-----------|-------------------|-----------------|
-            | JPCP + Dowel Bar | 2.7 | 3.2 |
+            | JPCP + Dowel Bar | 2.5-3.1 | 3.2 |
             | JPCP ไม่มี Dowel | 3.2 | 3.8-4.4 |
-            | CRCP | 2.3 | 2.9 |
+            | CRCP | 2.3-2.7 | 2.9 |
             
             **หมายเหตุ:** ค่า J ต่ำ = การถ่ายแรงดี = รองรับ ESAL ได้มากขึ้น
             """)
