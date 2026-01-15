@@ -884,7 +884,7 @@ def main():
         
         # แปลง Cube เป็น Cylinder
         fc_cylinder = convert_cube_to_cylinder(fc_cube)
-        st.info(f"f'c (Cylinder) = 0.833 × {fc_cube} = **{fc_cylinder:.0f} ksc**")
+        st.info(f"f'c (Cylinder) = 0.8 × {fc_cube} = **{fc_cylinder:.0f} ksc**")
         
         # คำนวณ Ec
         ec = calculate_concrete_modulus(fc_cylinder)
@@ -920,11 +920,14 @@ def main():
         # ตารางอ้างอิงค่า J
         with st.expander("📊 ตารางค่า Load Transfer Coefficient (J)"):
             st.markdown("""
-            | ประเภทถนน | J (Tied P.C.C | J (AC Shoulder) |
+            | ประเภทถนน | J (Tied Shoulder) | J (AC Shoulder) |
             |-----------|-------------------|-----------------|
-            | JPCP/JRCP + Dowel Bar | 2.5-3.1 | 3.2 |
-            | JPCP/JRCP ไม่มี Dowel | 3.6-4.2 | 3.8-4.4 |
-            | CRCP | 2.3-2.9 | 2.9-3.2 |
+            | JPCP + Dowel Bar | 2.7 | 3.2 |
+            | JPCP ไม่มี Dowel | 3.2 | 3.8-4.4 |
+            | CRCP | 2.3 | 2.9 |
+            
+            **หมายเหตุ:** ค่า J ต่ำ = การถ่ายแรงดี = รองรับ ESAL ได้มากขึ้น
+            """)
         
         # ให้ผู้ใช้ป้อนค่าที่ต้องการใช้
         j_value = st.number_input(
@@ -940,7 +943,7 @@ def main():
         cd = st.number_input(
             "Drainage Coefficient (Cd)",
             min_value=0.7,
-            max_value=1.2,
+            max_value=1.3,
             value=1.0,
             step=0.05,
             format="%.2f",
