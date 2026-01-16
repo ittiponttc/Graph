@@ -772,7 +772,7 @@ def main():
         W18 = st.number_input(
             "Design ESALs (W₁₈)",
             min_value=100000,
-            max_value=100000000,
+            max_value=250000000,
             value=5000000,
             step=100000,
             format="%d",
