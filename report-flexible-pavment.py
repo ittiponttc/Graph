@@ -1,13 +1,17 @@
 """
 ================================================================================
-AASHTO 1993 Flexible Pavement Design - Streamlit Application
+AASHTO 1993 Flexible Pavement Design - Streamlit Application (Version 2)
 ================================================================================
 แอปพลิเคชันสำหรับออกแบบ Flexible Pavement ตามวิธี AASHTO 1993
-เหมาะสำหรับการเรียนการสอนและการออกแบบจริง
+ปรับปรุงตามมาตรฐานกรมทางหลวง (DOH Thailand)
+
+Features:
+- Material database ตามมาตรฐาน ทล.
+- Step-by-step thickness calculation (หาความหนาแต่ละชั้น)
+- Drainage coefficient default = 1.0
 
 Author: Civil Engineering Department
-Version: 1.0
-License: MIT
+Version: 2.0
 ================================================================================
 """
 
@@ -17,86 +21,125 @@ from scipy.optimize import brentq
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from io import BytesIO
-import base64
 from datetime import datetime
 from docx import Document
-from docx.shared import Inches, Pt, Cm, RGBColor
+from docx.shared import Inches, Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 
 # ================================================================================
-# CONFIGURATION & CONSTANTS
+# PAGE CONFIGURATION
 # ================================================================================
 
 st.set_page_config(
-    page_title="AASHTO 1993 Flexible Pavement Design",
+    page_title="AASHTO 1993 Flexible Pavement Design (DOH)",
     page_icon="🛣️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ================================================================================
-# MATERIAL DATABASE
+# MATERIAL DATABASE - ตามมาตรฐานกรมทางหลวง (DOH Thailand)
 # ================================================================================
 
 MATERIALS = {
-    "Asphalt Concrete (AC)": {
-        "elastic_modulus_mpa": 3100,      # MPa
-        "elastic_modulus_psi": 450000,    # psi
-        "layer_coeff": 0.44,              # a₁
-        "drainage_range": (1.0, 1.0),     # m₁ typically 1.0 for AC
-        "color": "#2C3E50",               # สีเข้มสำหรับแสดงผล
-        "name_th": "แอสฟัลต์คอนกรีต (AC)"
+    # ============ ชั้นผิวทาง (Surface) ============
+    "ผิวทางลาดยาง AC": {
+        "layer_coeff": 0.40,
+        "drainage_coeff": 1.0,
+        "mr_psi": 362500,
+        "mr_mpa": 2500,
+        "layer_type": "surface",
+        "color": "#2C3E50",
+        "short_name": "AC"
     },
-    "Crushed Aggregate Base": {
-        "elastic_modulus_mpa": 207,       # MPa
-        "elastic_modulus_psi": 30000,     # psi
-        "layer_coeff": 0.14,              # a₂
-        "drainage_range": (0.80, 1.25),   # m₂
-        "color": "#795548",               # สีน้ำตาล
-        "name_th": "ชั้นพื้นทางหินคลุก (Crushed Aggregate Base)"
+    "ผิวทางลาดยาง PMA": {
+        "layer_coeff": 0.40,
+        "drainage_coeff": 1.0,
+        "mr_psi": 536500,
+        "mr_mpa": 3700,
+        "layer_type": "surface",
+        "color": "#1A252F",
+        "short_name": "PMA"
     },
-    "Cement Treated Base (CTB)": {
-        "elastic_modulus_mpa": 690,       # MPa
-        "elastic_modulus_psi": 100000,    # psi
-        "layer_coeff": 0.23,              # a₂
-        "drainage_range": (0.80, 1.25),   # m₂
-        "color": "#78909C",               # สีเทา
-        "name_th": "ชั้นพื้นทางซีเมนต์ปรับปรุงคุณภาพ (CTB)"
+    
+    # ============ ชั้นพื้นทาง (Base) ============
+    "พื้นทางซีเมนต์ CTB": {
+        "layer_coeff": 0.15,
+        "drainage_coeff": 1.0,
+        "mr_psi": 174000,
+        "mr_mpa": 1200,
+        "layer_type": "base",
+        "color": "#78909C",
+        "short_name": "CTB"
     },
-    "Granular Subbase": {
-        "elastic_modulus_mpa": 103,       # MPa
-        "elastic_modulus_psi": 15000,     # psi
-        "layer_coeff": 0.11,              # a₃
-        "drainage_range": (0.80, 1.25),   # m₃
-        "color": "#A1887F",               # สีน้ำตาลอ่อน
-        "name_th": "ชั้นรองพื้นทางวัสดุมวลรวม (Granular Subbase)"
+    "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc.": {
+        "layer_coeff": 0.15,
+        "drainage_coeff": 1.0,
+        "mr_psi": 123250,
+        "mr_mpa": 850,
+        "layer_type": "base",
+        "color": "#607D8B",
+        "short_name": "SCAB"
     },
-    "Improved Subgrade": {
-        "elastic_modulus_mpa": 69,        # MPa
-        "elastic_modulus_psi": 10000,     # psi
-        "layer_coeff": 0.08,              # a₄
-        "drainage_range": (0.80, 1.25),   # m₄
-        "color": "#BCAAA4",               # สีเบจ
-        "name_th": "ชั้นดินเดิมปรับปรุง (Improved Subgrade)"
+    "พื้นทางหินคลุก CBR 80%": {
+        "layer_coeff": 0.13,
+        "drainage_coeff": 1.0,
+        "mr_psi": 50750,
+        "mr_mpa": 350,
+        "layer_type": "base",
+        "color": "#795548",
+        "short_name": "CAB"
     },
-    "Lime Treated Subgrade": {
-        "elastic_modulus_mpa": 138,       # MPa
-        "elastic_modulus_psi": 20000,     # psi
-        "layer_coeff": 0.10,              # a₄
-        "drainage_range": (0.80, 1.25),   # m₄
-        "color": "#D7CCC8",               # สีครีม
-        "name_th": "ชั้นดินเดิมปรับปรุงด้วยปูนขาว"
+    "พื้นทางดินซีเมนต์ UCS 17.5 ksc.": {
+        "layer_coeff": 0.13,
+        "drainage_coeff": 1.0,
+        "mr_psi": 50750,
+        "mr_mpa": 350,
+        "layer_type": "base",
+        "color": "#8D6E63",
+        "short_name": "SCB"
     },
-    "Emulsified Asphalt Mix (EAM)": {
-        "elastic_modulus_mpa": 2070,      # MPa
-        "elastic_modulus_psi": 300000,    # psi
-        "layer_coeff": 0.30,              # a₂
-        "drainage_range": (1.0, 1.0),     # m₂
-        "color": "#424242",               # สีเทาเข้ม
-        "name_th": "ส่วนผสมแอสฟัลต์อิมัลชัน (EAM)"
+    "พื้นทางวัสดุหมุนเวียน (Recycling)": {
+        "layer_coeff": 0.15,
+        "drainage_coeff": 1.0,
+        "mr_psi": 123250,
+        "mr_mpa": 850,
+        "layer_type": "base",
+        "color": "#5D4037",
+        "short_name": "RAP"
+    },
+    
+    # ============ ชั้นรองพื้นทาง (Subbase) ============
+    "รองพื้นทางวัสดุมวลรวม CBR 25%": {
+        "layer_coeff": 0.10,
+        "drainage_coeff": 1.0,
+        "mr_psi": 21750,
+        "mr_mpa": 150,
+        "layer_type": "subbase",
+        "color": "#A1887F",
+        "short_name": "GSB"
+    },
+    
+    # ============ วัสดุคัดเลือก (Selected Material) ============
+    "วัสดุคัดเลือก ก": {
+        "layer_coeff": 0.08,
+        "drainage_coeff": 1.0,
+        "mr_psi": 14504,
+        "mr_mpa": 100,
+        "layer_type": "selected",
+        "color": "#BCAAA4",
+        "short_name": "SM-A"
+    },
+    
+    # ============ ไม่ใช้วัสดุ (Skip layer) ============
+    "ไม่ใช้วัสดุคัดเลือก (ใช้ดินทางทรพ)": {
+        "layer_coeff": 0.00,
+        "drainage_coeff": 1.0,
+        "mr_psi": 0,
+        "mr_mpa": 0,
+        "layer_type": "none",
+        "color": "#D7CCC8",
+        "short_name": "NONE"
     }
 }
 
@@ -133,200 +176,162 @@ def aashto_1993_equation(SN: float, W18: float, Zr: float, So: float,
     """
     AASHTO 1993 Main Design Equation for Flexible Pavement
     
-    สมการออกแบบหลักของ AASHTO 1993 สำหรับ Flexible Pavement
+    สมการออกแบบหลักของ AASHTO 1993
     
-    Equation:
     log₁₀(W₁₈) = Zr×So + 9.36×log₁₀(SN+1) - 0.20 
                  + log₁₀(ΔPSI/(4.2-1.5)) / (0.4 + 1094/(SN+1)^5.19)
                  + 2.32×log₁₀(Mr) - 8.07
-    
-    Parameters:
-    -----------
-    SN : float
-        Structural Number (trial value)
-    W18 : float
-        Design ESALs (18-kip equivalent single axle loads)
-    Zr : float
-        Standard normal deviate for reliability
-    So : float
-        Overall standard deviation
-    delta_psi : float
-        Change in serviceability (P₀ - Pₜ)
-    Mr : float
-        Subgrade resilient modulus (psi)
-    
-    Returns:
-    --------
-    float
-        Residual of equation (should be zero when SN is correct)
     """
-    # Left side of equation
     log_W18 = np.log10(W18)
     
-    # Right side terms
     term1 = Zr * So
     term2 = 9.36 * np.log10(SN + 1) - 0.20
     
-    # Serviceability loss term
     numerator = np.log10(delta_psi / (4.2 - 1.5))
     denominator = 0.4 + (1094 / ((SN + 1) ** 5.19))
     term3 = numerator / denominator
     
-    # Subgrade modulus term
     term4 = 2.32 * np.log10(Mr) - 8.07
     
-    # Right side total
     right_side = term1 + term2 + term3 + term4
     
-    # Return residual (should be zero at correct SN)
     return right_side - log_W18
 
 
-def calculate_sn_required(W18: float, Zr: float, So: float, 
-                           delta_psi: float, Mr: float) -> dict:
+def calculate_sn_for_layer(W18: float, Zr: float, So: float, 
+                            delta_psi: float, Mr: float) -> float:
     """
-    Calculate required Structural Number (SN) using iterative solution
+    Calculate required SN for a given subgrade/layer modulus
     
-    คำนวณค่า SN ที่ต้องการโดยใช้วิธีการหาคำตอบแบบ iterative
-    
-    Uses Brent's method to solve AASHTO 1993 equation for SN
-    
-    Parameters:
-    -----------
-    W18 : float
-        Design ESALs
-    Zr : float
-        Standard normal deviate
-    So : float
-        Overall standard deviation
-    delta_psi : float
-        Change in serviceability
-    Mr : float
-        Subgrade resilient modulus (psi)
-    
-    Returns:
-    --------
-    dict
-        Contains SN_required and iteration details
+    คำนวณค่า SN ที่ต้องการสำหรับค่า Mr ที่กำหนด
     """
-    # Define function to solve
     def f(SN):
         return aashto_1993_equation(SN, W18, Zr, So, delta_psi, Mr)
     
-    # Find SN using Brent's method
-    # Search range: 0.5 to 20 (typical practical range)
     try:
-        SN_required = brentq(f, 0.1, 20.0, xtol=1e-6, maxiter=100)
-        
-        # Store iteration details
-        iterations = []
-        for SN_test in np.linspace(0.5, SN_required * 1.5, 10):
-            residual = f(SN_test)
-            iterations.append({
-                'SN_test': SN_test,
-                'residual': residual
-            })
-        
-        return {
-            'SN_required': round(SN_required, 3),
-            'converged': True,
-            'iterations': iterations
-        }
-    
-    except ValueError as e:
-        # If solution not found in range
-        return {
-            'SN_required': None,
-            'converged': False,
-            'error': str(e),
-            'iterations': []
-        }
+        SN_required = brentq(f, 0.01, 25.0, xtol=1e-6, maxiter=100)
+        return round(SN_required, 2)
+    except ValueError:
+        return None
 
 
-def calculate_sn_provided(layers: list) -> dict:
+def calculate_layer_thicknesses(W18: float, Zr: float, So: float, delta_psi: float,
+                                 subgrade_mr: float, layers: list) -> dict:
     """
-    Calculate provided Structural Number from layer configuration
+    Calculate minimum thickness for each layer using AASHTO 1993 method
     
-    คำนวณค่า SN ที่ได้จากชั้นโครงสร้างถนนที่เลือก
+    คำนวณความหนาขั้นต่ำของแต่ละชั้น ตามวิธี AASHTO 1993
     
-    Equation: SN_provided = Σ(aᵢ × Dᵢ × mᵢ)
-    
-    Parameters:
-    -----------
-    layers : list of dict
-        Each dict contains:
-        - material: str (material name)
-        - thickness_cm: float (thickness in cm)
-        - drainage_coeff: float (mᵢ)
-    
-    Returns:
-    --------
-    dict
-        Contains SN_provided and layer-by-layer breakdown
+    สูตร:
+    - SN₁ = จากสมการ AASHTO โดยใช้ MR ของชั้นถัดไป
+    - D₁* ≥ SN₁ / (a₁ × m₁)
+    - D₂* ≥ (SN₂ - a₁×D₁×m₁) / (a₂ × m₂)
+    - เป็นต้น
     """
-    layer_details = []
-    total_sn = 0.0
+    results = {
+        'layers': [],
+        'sn_values': [],
+        'subgrade_mr': subgrade_mr,
+        'total_sn_required': None,
+        'total_sn_provided': 0
+    }
     
-    for i, layer in enumerate(layers):
-        material = layer['material']
-        thickness_cm = layer['thickness_cm']
-        drainage_coeff = layer['drainage_coeff']
-        
-        # Get material properties
-        mat_props = MATERIALS[material]
-        a_i = mat_props['layer_coeff']
-        
-        # Convert thickness: cm → inches
-        thickness_inch = thickness_cm / 2.54
-        
-        # Calculate layer contribution to SN
-        # For surface layer (AC), m = 1.0 typically
-        if i == 0 and material == "Asphalt Concrete (AC)":
-            m_i = 1.0  # Surface layer doesn't use drainage coefficient
+    # Get active layers (exclude "ไม่ใช้วัสดุ")
+    active_layers = [l for l in layers if l['material'] != "ไม่ใช้วัสดุคัดเลือก (ใช้ดินทางทรพ)"]
+    
+    if not active_layers:
+        return results
+    
+    # Calculate SN values for each layer interface
+    # SN_n = SN required when layer n is placed on layer n+1 (or subgrade)
+    
+    num_layers = len(active_layers)
+    sn_values = []
+    
+    # Calculate SN for each layer from bottom to top
+    # SN_n uses MR of the layer below
+    
+    for i in range(num_layers):
+        if i == num_layers - 1:
+            # Bottom layer uses subgrade MR
+            mr_below = subgrade_mr
         else:
-            m_i = drainage_coeff
+            # Use MR of layer below
+            mat_below = MATERIALS[active_layers[i + 1]['material']]
+            mr_below = mat_below['mr_psi']
         
-        sn_contribution = a_i * thickness_inch * m_i
-        total_sn += sn_contribution
-        
-        layer_details.append({
-            'layer_no': i + 1,
-            'material': material,
-            'material_th': mat_props['name_th'],
-            'thickness_cm': thickness_cm,
-            'thickness_inch': round(thickness_inch, 3),
-            'layer_coeff': a_i,
-            'drainage_coeff': m_i,
-            'sn_contribution': round(sn_contribution, 4)
+        sn_i = calculate_sn_for_layer(W18, Zr, So, delta_psi, mr_below)
+        sn_values.append({
+            'layer_index': i + 1,
+            'mr_below': mr_below,
+            'sn_required': sn_i
         })
     
-    return {
-        'SN_provided': round(total_sn, 3),
-        'layer_details': layer_details
-    }
+    results['sn_values'] = sn_values
+    
+    # Calculate total SN required (using subgrade MR)
+    results['total_sn_required'] = calculate_sn_for_layer(W18, Zr, So, delta_psi, subgrade_mr)
+    
+    # Calculate minimum thickness for each layer
+    cumulative_sn = 0
+    
+    for i, layer in enumerate(active_layers):
+        mat = MATERIALS[layer['material']]
+        a_i = mat['layer_coeff']
+        m_i = layer.get('drainage_coeff', 1.0)
+        
+        # Get SN required at this layer
+        sn_required_at_layer = sn_values[i]['sn_required'] if sn_values[i]['sn_required'] else 0
+        
+        # Calculate minimum thickness
+        if a_i > 0 and m_i > 0:
+            # D_i* ≥ (SN_i - cumulative_SN) / (a_i × m_i)
+            remaining_sn = max(0, sn_required_at_layer - cumulative_sn)
+            min_thickness_inch = remaining_sn / (a_i * m_i)
+            min_thickness_cm = min_thickness_inch * 2.54
+        else:
+            min_thickness_inch = 0
+            min_thickness_cm = 0
+        
+        # Get design thickness from user input
+        design_thickness_cm = layer['thickness_cm']
+        design_thickness_inch = design_thickness_cm / 2.54
+        
+        # Calculate SN contribution
+        sn_contribution = a_i * design_thickness_inch * m_i
+        cumulative_sn += sn_contribution
+        
+        # Check if design thickness is adequate
+        is_ok = design_thickness_cm >= min_thickness_cm
+        
+        results['layers'].append({
+            'layer_no': i + 1,
+            'material': layer['material'],
+            'short_name': mat['short_name'],
+            'mr_psi': mat['mr_psi'],
+            'a_i': a_i,
+            'm_i': m_i,
+            'sn_required_at_layer': sn_required_at_layer,
+            'min_thickness_inch': round(min_thickness_inch, 2),
+            'min_thickness_cm': round(min_thickness_cm, 1),
+            'design_thickness_cm': design_thickness_cm,
+            'design_thickness_inch': round(design_thickness_inch, 2),
+            'sn_contribution': round(sn_contribution, 4),
+            'cumulative_sn': round(cumulative_sn, 2),
+            'is_ok': is_ok
+        })
+    
+    results['total_sn_provided'] = round(cumulative_sn, 2)
+    
+    return results
 
 
 def check_design(sn_required: float, sn_provided: float) -> dict:
-    """
-    Check if design is adequate
-    
-    ตรวจสอบว่าการออกแบบเพียงพอหรือไม่
-    
-    Parameters:
-    -----------
-    sn_required : float
-        Required Structural Number from AASHTO equation
-    sn_provided : float
-        Provided Structural Number from layer configuration
-    
-    Returns:
-    --------
-    dict
-        Pass/Fail status and safety margin
-    """
+    """Check if design is adequate"""
     if sn_required is None:
         return {
             'status': 'ERROR',
+            'passed': False,
             'message': 'Cannot calculate SN_required',
             'safety_margin': None
         }
@@ -335,10 +340,10 @@ def check_design(sn_required: float, sn_provided: float) -> dict:
     passed = sn_provided >= sn_required
     
     return {
-        'status': 'PASS ✅' if passed else 'FAIL ❌',
+        'status': 'OK' if passed else 'NG',
         'passed': passed,
-        'safety_margin': round(safety_margin, 3),
-        'message': f"SN_provided ({sn_provided:.3f}) {'≥' if passed else '<'} SN_required ({sn_required:.3f})"
+        'safety_margin': round(safety_margin, 2),
+        'message': f"SN_provided ({sn_provided:.2f}) {'≥' if passed else '<'} SN_required ({sn_required:.2f})"
     }
 
 
@@ -346,122 +351,102 @@ def check_design(sn_required: float, sn_provided: float) -> dict:
 # VISUALIZATION FUNCTIONS
 # ================================================================================
 
-def plot_pavement_section(layers: list, fig_width: float = 10, fig_height: float = 10, 
-                          use_thai: bool = False) -> plt.Figure:
+def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt.Figure:
     """
     Draw vertical pavement section diagram
     
-    วาดภาพหน้าตัดโครงสร้างถนนแนวตั้ง
-    
-    Parameters:
-    -----------
-    layers : list of dict
-        Layer configuration with materials and thicknesses
-    fig_width, fig_height : float
-        Figure dimensions in inches
-    use_thai : bool
-        Use Thai text (requires Thai font installed)
-    
-    Returns:
-    --------
-    matplotlib.Figure
-        Pavement section diagram
+    Layout: ความหนา (ซ้าย) | ชั้นวัสดุ | ชนิดวัสดุ (ขวา)
     """
-    # Short names for display
-    SHORT_NAMES = {
-        "Asphalt Concrete (AC)": "AC",
-        "Crushed Aggregate Base": "CAB",
-        "Cement Treated Base (CTB)": "CTB",
-        "Granular Subbase": "GSB",
-        "Improved Subgrade": "ISG",
-        "Lime Treated Subgrade": "LTS",
-        "Emulsified Asphalt Mix (EAM)": "EAM"
-    }
     
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    if not layers_result:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.text(0.5, 0.5, 'No layers defined', ha='center', va='center', fontsize=14)
+        ax.axis('off')
+        return fig
     
-    # Calculate total thickness for scaling
-    total_thickness = sum([layer['thickness_cm'] for layer in layers])
+    fig, ax = plt.subplots(figsize=(12, 10))
     
-    # Add subgrade thickness for visualization
-    subgrade_thickness = total_thickness * 0.3
+    total_thickness = sum([l['design_thickness_cm'] for l in layers_result])
+    subgrade_thickness = max(15, total_thickness * 0.20)
     
-    # Drawing parameters
-    layer_width = 6
-    x_center = 4
+    layer_width = 8
+    x_center = 6
     current_y = total_thickness + subgrade_thickness
     
-    # Draw each layer from top to bottom
-    for i, layer in enumerate(layers):
-        material = layer['material']
-        thickness_cm = layer['thickness_cm']
-        mat_props = MATERIALS[material]
+    # Draw each layer
+    for i, layer in enumerate(layers_result):
+        thickness_cm = layer['design_thickness_cm']
         
-        # Create rectangle for layer
+        # Get color from MATERIALS
+        mat = MATERIALS.get(layer['material'], {})
+        color = mat.get('color', '#888888')
+        short_name = mat.get('short_name', layer.get('short_name', 'Layer'))
+        
+        # Create rectangle
         rect = mpatches.FancyBboxPatch(
             (x_center - layer_width/2, current_y - thickness_cm),
-            layer_width,
-            thickness_cm,
+            layer_width, thickness_cm,
             boxstyle="round,pad=0.02",
-            facecolor=mat_props['color'],
-            edgecolor='black',
-            linewidth=2
+            facecolor=color,
+            edgecolor='black', linewidth=2
         )
         ax.add_patch(rect)
         
-        # Add layer information text (use short name for better display)
-        short_name = SHORT_NAMES.get(material, material[:10])
-        ax.text(x_center, current_y - thickness_cm/2, 
-                short_name,
-                ha='center', va='center',
-                fontsize=12, fontweight='bold',
-                color='white' if mat_props['color'] in ['#2C3E50', '#424242', '#78909C', '#795548'] else 'black')
+        # Text color based on background
+        text_color = 'white' if color in ['#2C3E50', '#1A252F', '#78909C', '#607D8B', '#795548', '#8D6E63', '#5D4037', '#6D4C41'] else 'black'
         
-        # Thickness label on the right
+        # LEFT SIDE: Thickness (ความหนา)
         ax.annotate(
-            f'{thickness_cm:.0f} cm\n({thickness_cm/2.54:.1f}")',
-            xy=(x_center + layer_width/2 + 0.1, current_y - thickness_cm/2),
-            xytext=(x_center + layer_width/2 + 2.0, current_y - thickness_cm/2),
-            fontsize=10, fontweight='bold',
+            f'{thickness_cm:.0f} cm',
+            xy=(x_center - layer_width/2 - 0.1, current_y - thickness_cm/2),
+            xytext=(x_center - layer_width/2 - 1.8, current_y - thickness_cm/2),
+            fontsize=12, fontweight='bold',
             arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
-            va='center', ha='left',
-            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', edgecolor='gray')
+            va='center', ha='right',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='lightyellow', edgecolor='orange', linewidth=1.5)
         )
         
-        # Layer coefficient on the left
-        ax.text(x_center - layer_width/2 - 0.5, current_y - thickness_cm/2,
-                f'a{i+1}={mat_props["layer_coeff"]:.2f}',
-                ha='right', va='center', fontsize=11, fontweight='bold',
-                bbox=dict(boxstyle='round,pad=0.2', facecolor='lightblue', edgecolor='gray'))
+        # RIGHT SIDE: Material short name (ชื่อย่อวัสดุ - English)
+        ax.annotate(
+            short_name,
+            xy=(x_center + layer_width/2 + 0.1, current_y - thickness_cm/2),
+            xytext=(x_center + layer_width/2 + 1.8, current_y - thickness_cm/2),
+            fontsize=12, fontweight='bold',
+            arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
+            va='center', ha='left',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcyan', edgecolor='steelblue', linewidth=1.5)
+        )
         
         current_y -= thickness_cm
     
     # Draw subgrade
     subgrade_rect = mpatches.FancyBboxPatch(
         (x_center - layer_width/2, current_y - subgrade_thickness),
-        layer_width,
-        subgrade_thickness,
+        layer_width, subgrade_thickness,
         boxstyle="round,pad=0.02",
-        facecolor='#8D6E63',
-        edgecolor='black',
-        linewidth=2,
-        linestyle='--'
+        facecolor='#6D4C41', edgecolor='black', linewidth=2, linestyle='--'
     )
     ax.add_patch(subgrade_rect)
-    ax.text(x_center, current_y - subgrade_thickness/2,
-            'Subgrade',
-            ha='center', va='center',
-            fontsize=10, fontweight='bold', color='white')
     
-    # Add title
-    ax.text(x_center, total_thickness + subgrade_thickness + 2,
+    # Subgrade label (right side only)
+    ax.annotate(
+        'Subgrade',
+        xy=(x_center + layer_width/2 + 0.1, current_y - subgrade_thickness/2),
+        xytext=(x_center + layer_width/2 + 1.8, current_y - subgrade_thickness/2),
+        fontsize=12, fontweight='bold',
+        arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
+        va='center', ha='left',
+        bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcyan', edgecolor='steelblue', linewidth=1.5)
+    )
+    
+    # Title
+    ax.text(x_center, total_thickness + subgrade_thickness + 3,
             'Pavement Cross Section',
             ha='center', va='center',
-            fontsize=14, fontweight='bold')
+            fontsize=16, fontweight='bold')
     
-    # Configure axes
-    ax.set_xlim(-2, 14)
-    ax.set_ylim(-5, total_thickness + subgrade_thickness + 4)
+    ax.set_xlim(-4, 18)
+    ax.set_ylim(-5, total_thickness + subgrade_thickness + 5)
     ax.set_aspect('equal')
     ax.axis('off')
     
@@ -470,14 +455,9 @@ def plot_pavement_section(layers: list, fig_width: float = 10, fig_height: float
 
 
 def get_figure_as_bytes(fig: plt.Figure) -> BytesIO:
-    """
-    Convert matplotlib figure to bytes for export
-    
-    แปลงรูปภาพ matplotlib เป็น bytes สำหรับการ export
-    """
+    """Convert matplotlib figure to bytes"""
     buf = BytesIO()
-    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight',
-                facecolor='white', edgecolor='none')
+    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='white')
     buf.seek(0)
     return buf
 
@@ -486,88 +466,56 @@ def get_figure_as_bytes(fig: plt.Figure) -> BytesIO:
 # WORD EXPORT FUNCTION
 # ================================================================================
 
-def create_word_report(project_title: str, inputs: dict, layers: list,
-                       sn_required: float, sn_provided: dict,
+def create_word_report(project_title: str, inputs: dict, calc_results: dict,
                        design_check: dict, fig: plt.Figure) -> BytesIO:
-    """
-    Create Word document report for pavement design
+    """Create Word document report with step-by-step calculations"""
     
-    สร้างรายงาน Word สำหรับการออกแบบโครงสร้างถนน
-    
-    Parameters:
-    -----------
-    project_title : str
-        Project title
-    inputs : dict
-        Design input parameters
-    layers : list
-        Layer configuration
-    sn_required : float
-        Required Structural Number
-    sn_provided : dict
-        Provided SN details
-    design_check : dict
-        Design check results
-    fig : plt.Figure
-        Pavement section figure
-    
-    Returns:
-    --------
-    BytesIO
-        Word document as bytes
-    """
     doc = Document()
     
-    # Set up document styles
-    style = doc.styles['Normal']
-    font = style.font
-    font.name = 'TH Sarabun New'
-    font.size = Pt(14)
-    
-    # Title
+    # ========================================
+    # TITLE
+    # ========================================
     title = doc.add_heading('รายงานการออกแบบ Flexible Pavement', level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    # Project Title
     doc.add_heading(f'โครงการ: {project_title}', level=1)
-    
-    # Date
     doc.add_paragraph(f'วันที่ออกแบบ: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
     
-    # Section 1: Design Method
+    # ========================================
+    # SECTION 1: Design Method
+    # ========================================
     doc.add_heading('1. วิธีการออกแบบ', level=2)
     doc.add_paragraph(
         'การออกแบบโครงสร้างถนนใช้วิธี AASHTO 1993 Guide for Design of Pavement Structures '
-        'โดยใช้สมการหลักดังนี้:'
+        'ตามมาตรฐานกรมทางหลวง โดยใช้สมการหลักดังนี้:'
     )
     
-    # AASHTO Equation (simplified text version)
+    # Main equation
     eq_para = doc.add_paragraph()
-    eq_para.add_run(
-        'log₁₀(W₁₈) = Zᵣ×Sₒ + 9.36×log₁₀(SN+1) - 0.20 + '
-        'log₁₀(ΔPSI/(4.2-1.5))/(0.4+1094/(SN+1)⁵·¹⁹) + 2.32×log₁₀(Mᵣ) - 8.07'
-    ).italic = True
+    eq_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    eq_run = eq_para.add_run(
+        'log₁₀(W₁₈) = Zᵣ·Sₒ + 9.36·log₁₀(SN+1) - 0.20 + '
+        'log₁₀(ΔPSI/2.7) / [0.4 + 1094/(SN+1)⁵·¹⁹] + 2.32·log₁₀(Mᵣ) - 8.07'
+    )
+    eq_run.italic = True
+    eq_run.font.size = Pt(11)
     
-    # Section 2: Input Parameters
-    doc.add_heading('2. ข้อมูลนำเข้าสำหรับการออกแบบ (Design Inputs)', level=2)
+    # ========================================
+    # SECTION 2: Input Parameters
+    # ========================================
+    doc.add_heading('2. ข้อมูลนำเข้า (Design Inputs)', level=2)
     
-    # Create input table
     input_table = doc.add_table(rows=1, cols=3)
     input_table.style = 'Table Grid'
     
-    # Header row
-    header_cells = input_table.rows[0].cells
-    header_cells[0].text = 'พารามิเตอร์'
-    header_cells[1].text = 'ค่า'
-    header_cells[2].text = 'หน่วย'
-    
-    # Make header bold
-    for cell in header_cells:
+    headers = ['พารามิเตอร์', 'ค่า', 'หน่วย']
+    for i, header in enumerate(headers):
+        cell = input_table.rows[0].cells[i]
+        cell.text = header
         for paragraph in cell.paragraphs:
             for run in paragraph.runs:
                 run.bold = True
     
-    # Add input data
     input_data = [
         ('Design ESALs (W₁₈)', f'{inputs["W18"]:,.0f}', '18-kip ESAL'),
         ('Reliability (R)', f'{inputs["reliability"]}', '%'),
@@ -575,8 +523,9 @@ def create_word_report(project_title: str, inputs: dict, layers: list,
         ('Overall Standard Deviation (Sₒ)', f'{inputs["So"]:.2f}', '-'),
         ('Initial Serviceability (P₀)', f'{inputs["P0"]:.1f}', '-'),
         ('Terminal Serviceability (Pₜ)', f'{inputs["Pt"]:.1f}', '-'),
-        ('ΔPSI', f'{inputs["delta_psi"]:.1f}', '-'),
-        ('Subgrade Resilient Modulus (Mᵣ)', f'{inputs["Mr"]:,.0f}', 'psi'),
+        ('ΔPSI = P₀ - Pₜ', f'{inputs["delta_psi"]:.1f}', '-'),
+        ('Subgrade CBR', f'{inputs.get("CBR", "-")}', '%'),
+        ('Subgrade Mᵣ = 1500 × CBR', f'{inputs["Mr"]:,.0f}', 'psi'),
     ]
     
     for param, value, unit in input_data:
@@ -585,117 +534,186 @@ def create_word_report(project_title: str, inputs: dict, layers: list,
         row.cells[1].text = value
         row.cells[2].text = unit
     
-    # Section 3: Layer Configuration
-    doc.add_heading('3. โครงสร้างชั้นทาง (Pavement Layer Configuration)', level=2)
+    # ========================================
+    # SECTION 3: Material Properties
+    # ========================================
+    doc.add_heading('3. คุณสมบัติวัสดุชั้นทาง', level=2)
     
-    layer_table = doc.add_table(rows=1, cols=6)
-    layer_table.style = 'Table Grid'
+    mat_table = doc.add_table(rows=1, cols=6)
+    mat_table.style = 'Table Grid'
     
-    # Header
-    headers = ['ชั้นที่', 'วัสดุ', 'ความหนา (cm)', 'ความหนา (in)', 'aᵢ', 'mᵢ']
-    header_cells = layer_table.rows[0].cells
-    for i, header in enumerate(headers):
-        header_cells[i].text = header
-        for paragraph in header_cells[i].paragraphs:
-            for run in paragraph.runs:
-                run.bold = True
-    
-    # Add layer data
-    for detail in sn_provided['layer_details']:
-        row = layer_table.add_row()
-        row.cells[0].text = str(detail['layer_no'])
-        row.cells[1].text = detail['material_th']
-        row.cells[2].text = f'{detail["thickness_cm"]:.1f}'
-        row.cells[3].text = f'{detail["thickness_inch"]:.3f}'
-        row.cells[4].text = f'{detail["layer_coeff"]:.2f}'
-        row.cells[5].text = f'{detail["drainage_coeff"]:.2f}'
-    
-    # Section 4: SN Calculation
-    doc.add_heading('4. การคำนวณ Structural Number', level=2)
-    
-    doc.add_heading('4.1 SN Required (ค่าที่ต้องการ)', level=3)
-    doc.add_paragraph(f'จากการแก้สมการ AASHTO 1993 โดยวิธี iterative:')
-    doc.add_paragraph(f'SN_required = {sn_required:.3f}')
-    
-    doc.add_heading('4.2 SN Provided (ค่าที่ได้จากชั้นทาง)', level=3)
-    doc.add_paragraph('สูตร: SN_provided = Σ(aᵢ × Dᵢ × mᵢ)')
-    
-    # SN contribution table
-    sn_table = doc.add_table(rows=1, cols=5)
-    sn_table.style = 'Table Grid'
-    
-    headers = ['ชั้นที่', 'aᵢ', 'Dᵢ (in)', 'mᵢ', 'SN contribution']
-    header_cells = sn_table.rows[0].cells
-    for i, header in enumerate(headers):
-        header_cells[i].text = header
-        for paragraph in header_cells[i].paragraphs:
-            for run in paragraph.runs:
-                run.bold = True
-    
-    for detail in sn_provided['layer_details']:
-        row = sn_table.add_row()
-        row.cells[0].text = str(detail['layer_no'])
-        row.cells[1].text = f'{detail["layer_coeff"]:.2f}'
-        row.cells[2].text = f'{detail["thickness_inch"]:.3f}'
-        row.cells[3].text = f'{detail["drainage_coeff"]:.2f}'
-        row.cells[4].text = f'{detail["sn_contribution"]:.4f}'
-    
-    # Total row
-    total_row = sn_table.add_row()
-    total_row.cells[0].text = 'รวม'
-    total_row.cells[4].text = f'{sn_provided["SN_provided"]:.3f}'
-    for cell in total_row.cells:
+    mat_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'mᵢ', 'Mᵣ (psi)', 'Mᵣ (MPa)']
+    for i, header in enumerate(mat_headers):
+        cell = mat_table.rows[0].cells[i]
+        cell.text = header
         for paragraph in cell.paragraphs:
             for run in paragraph.runs:
                 run.bold = True
     
-    # Section 5: Design Verification
-    doc.add_heading('5. ผลการตรวจสอบการออกแบบ (Design Verification)', level=2)
+    for layer in calc_results['layers']:
+        row = mat_table.add_row()
+        row.cells[0].text = str(layer['layer_no'])
+        row.cells[1].text = layer['material']
+        row.cells[2].text = f'{layer["a_i"]:.2f}'
+        row.cells[3].text = f'{layer["m_i"]:.2f}'
+        row.cells[4].text = f'{layer["mr_psi"]:,}'
+        mr_mpa = layer["mr_psi"] * 0.006895  # แปลง psi เป็น MPa
+        row.cells[5].text = f'{mr_mpa:,.0f}'
+    
+    # ========================================
+    # SECTION 4: Step-by-Step Calculation
+    # ========================================
+    doc.add_heading('4. ขั้นตอนการคำนวณความหนาชั้นทาง', level=2)
+    
+    doc.add_paragraph(
+        'การคำนวณความหนาขั้นต่ำของแต่ละชั้น ใช้หลักการว่า Structural Number (SN) '
+        'ที่จุดใดๆ ต้องมากกว่าหรือเท่ากับ SN ที่ต้องการ โดยคำนวณจากค่า Mᵣ ของชั้นถัดไป'
+    )
+    
+    for layer in calc_results['layers']:
+        # Layer header
+        doc.add_heading(f'ชั้นที่ {layer["layer_no"]}: {layer["material"]}', level=3)
+        
+        # Material properties
+        doc.add_paragraph(f'ข้อมูลวัสดุ:')
+        props_para = doc.add_paragraph()
+        props_para.add_run(f'    • Mᵣ = {layer["mr_psi"]:,} psi\n')
+        props_para.add_run(f'    • Layer Coefficient (a{layer["layer_no"]}) = {layer["a_i"]:.2f}\n')
+        props_para.add_run(f'    • Drainage Coefficient (m{layer["layer_no"]}) = {layer["m_i"]:.2f}')
+        
+        # SN calculation
+        doc.add_paragraph(f'การคำนวณ SN:')
+        sn_para = doc.add_paragraph()
+        sn_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sn_run = sn_para.add_run(f'จากสมการ AASHTO 1993:  SN{layer["layer_no"]} = {layer["sn_required_at_layer"]:.2f}')
+        sn_run.bold = True
+        
+        # Thickness calculation
+        doc.add_paragraph(f'การคำนวณความหนาขั้นต่ำ:')
+        
+        if layer['layer_no'] == 1:
+            # First layer formula
+            formula_para = doc.add_paragraph()
+            formula_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            formula_text = f'D₁ ≥ SN₁ / (a₁ × m₁) = {layer["sn_required_at_layer"]:.2f} / ({layer["a_i"]:.2f} × {layer["m_i"]:.2f})'
+            formula_para.add_run(formula_text).italic = True
+        else:
+            # Get previous cumulative SN
+            prev_sn = calc_results['layers'][layer['layer_no']-2]['cumulative_sn']
+            
+            formula_para = doc.add_paragraph()
+            formula_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            formula_text = f'D{layer["layer_no"]} ≥ (SN{layer["layer_no"]} - SNₚᵣₑᵥ) / (a{layer["layer_no"]} × m{layer["layer_no"]}) = ({layer["sn_required_at_layer"]:.2f} - {prev_sn:.2f}) / ({layer["a_i"]:.2f} × {layer["m_i"]:.2f})'
+            formula_para.add_run(formula_text).italic = True
+        
+        # Results
+        result_para = doc.add_paragraph()
+        result_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        result_para.add_run(f'D{layer["layer_no"]}(min) = {layer["min_thickness_inch"]:.2f} นิ้ว = {layer["min_thickness_cm"]:.1f} ซม.').bold = True
+        
+        # Design thickness selection
+        doc.add_paragraph(f'เลือกใช้ความหนา:')
+        design_para = doc.add_paragraph()
+        design_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        design_para.add_run(f'D{layer["layer_no"]}(design) = {layer["design_thickness_cm"]:.0f} ซม. ({layer["design_thickness_inch"]:.2f} นิ้ว)').bold = True
+        
+        # SN contribution
+        doc.add_paragraph(f'SN contribution:')
+        contrib_para = doc.add_paragraph()
+        contrib_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contrib_text = f'ΔSN{layer["layer_no"]} = a{layer["layer_no"]} × D{layer["layer_no"]} × m{layer["layer_no"]} = {layer["a_i"]:.2f} × {layer["design_thickness_inch"]:.2f} × {layer["m_i"]:.2f} = {layer["sn_contribution"]:.3f}'
+        contrib_para.add_run(contrib_text)
+        
+        # Cumulative SN
+        cum_para = doc.add_paragraph()
+        cum_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cum_para.add_run(f'ΣSN = {layer["cumulative_sn"]:.2f}').bold = True
+        
+        # Check status
+        status_text = '✓ OK' if layer['is_ok'] else '✗ NG - ต้องเพิ่มความหนา'
+        status_para = doc.add_paragraph()
+        status_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        status_run = status_para.add_run(f'สถานะ: {status_text}')
+        status_run.bold = True
+        
+        doc.add_paragraph()  # Spacing
+    
+    # ========================================
+    # SECTION 5: SN Summary Table
+    # ========================================
+    doc.add_heading('5. ตารางสรุปการคำนวณ Structural Number', level=2)
+    
+    sn_table = doc.add_table(rows=1, cols=7)
+    sn_table.style = 'Table Grid'
+    
+    sn_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'Dᵢ (นิ้ว)', 'mᵢ', 'ΔSNᵢ', 'ΣSN']
+    for i, header in enumerate(sn_headers):
+        cell = sn_table.rows[0].cells[i]
+        cell.text = header
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                run.bold = True
+    
+    for layer in calc_results['layers']:
+        row = sn_table.add_row()
+        row.cells[0].text = str(layer['layer_no'])
+        row.cells[1].text = layer['short_name']
+        row.cells[2].text = f'{layer["a_i"]:.2f}'
+        row.cells[3].text = f'{layer["design_thickness_inch"]:.2f}'
+        row.cells[4].text = f'{layer["m_i"]:.2f}'
+        row.cells[5].text = f'{layer["sn_contribution"]:.3f}'
+        row.cells[6].text = f'{layer["cumulative_sn"]:.2f}'
+    
+    # Formula
+    doc.add_paragraph()
+    formula_p = doc.add_paragraph()
+    formula_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    formula_p.add_run('สูตร: SN = Σ(aᵢ × Dᵢ × mᵢ)').italic = True
+    
+    # ========================================
+    # SECTION 6: Design Verification
+    # ========================================
+    doc.add_heading('6. ผลการตรวจสอบการออกแบบ', level=2)
     
     result_table = doc.add_table(rows=4, cols=2)
     result_table.style = 'Table Grid'
     
     result_data = [
-        ('SN Required', f'{sn_required:.3f}'),
-        ('SN Provided', f'{sn_provided["SN_provided"]:.3f}'),
-        ('Safety Margin', f'{design_check["safety_margin"]:.3f}'),
-        ('ผลการตรวจสอบ', design_check['status']),
+        ('SN Required (จากสมการ AASHTO)', f'{calc_results["total_sn_required"]:.2f}'),
+        ('SN Provided (จากชั้นทาง)', f'{calc_results["total_sn_provided"]:.2f}'),
+        ('Safety Margin', f'{design_check["safety_margin"]:.2f}'),
+        ('ผลการตรวจสอบ', 'ผ่าน (OK)' if design_check['passed'] else 'ไม่ผ่าน (NG)'),
     ]
     
     for i, (param, value) in enumerate(result_data):
         result_table.rows[i].cells[0].text = param
         result_table.rows[i].cells[1].text = value
     
-    # Section 6: Pavement Section Figure
-    doc.add_heading('6. ภาพตัดขวางโครงสร้างถนน', level=2)
-    
-    # Save figure to bytes and add to document
-    fig_bytes = get_figure_as_bytes(fig)
-    doc.add_picture(fig_bytes, width=Inches(5))
-    
-    # Center the image
-    last_paragraph = doc.paragraphs[-1]
-    last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    # Section 7: Conclusion
-    doc.add_heading('7. สรุปผลการออกแบบ', level=2)
-    
+    # Conclusion
+    doc.add_paragraph()
     if design_check['passed']:
-        conclusion = (
-            f'การออกแบบ Flexible Pavement ผ่านเกณฑ์ที่กำหนด โดย SN_provided ({sn_provided["SN_provided"]:.3f}) '
-            f'มากกว่าหรือเท่ากับ SN_required ({sn_required:.3f}) '
-            f'ค่า Safety Margin = {design_check["safety_margin"]:.3f}'
-        )
+        conclusion = doc.add_paragraph()
+        conclusion.add_run(
+            f'สรุป: การออกแบบผ่านเกณฑ์ เนื่องจาก SN_provided ({calc_results["total_sn_provided"]:.2f}) ≥ '
+            f'SN_required ({calc_results["total_sn_required"]:.2f})'
+        ).bold = True
     else:
-        conclusion = (
-            f'การออกแบบ Flexible Pavement ไม่ผ่านเกณฑ์ที่กำหนด โดย SN_provided ({sn_provided["SN_provided"]:.3f}) '
-            f'น้อยกว่า SN_required ({sn_required:.3f}) '
-            f'กรุณาปรับเพิ่มความหนาชั้นทางหรือเปลี่ยนวัสดุที่มี Layer Coefficient สูงกว่า'
-        )
+        conclusion = doc.add_paragraph()
+        conclusion.add_run(
+            f'สรุป: การออกแบบไม่ผ่านเกณฑ์ กรุณาปรับเพิ่มความหนาชั้นทาง'
+        ).bold = True
     
-    doc.add_paragraph(conclusion)
+    # ========================================
+    # SECTION 7: Figure
+    # ========================================
+    doc.add_heading('7. ภาพตัดขวางโครงสร้างถนน', level=2)
+    fig_bytes = get_figure_as_bytes(fig)
+    doc.add_picture(fig_bytes, width=Inches(6))
+    doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    # Save document to bytes
+    # ========================================
+    # Save document
+    # ========================================
     doc_bytes = BytesIO()
     doc.save(doc_bytes)
     doc_bytes.seek(0)
@@ -713,33 +731,35 @@ def main():
     # Header
     st.title("🛣️ AASHTO 1993 Flexible Pavement Design")
     st.markdown("""
-    **แอปพลิเคชันออกแบบโครงสร้างทางแบบยืดหยุ่น (Flexible Pavement) ตามมาตรฐาน AASHTO 1993**
+    **แอปพลิเคชันออกแบบโครงสร้างทางแบบยืดหยุ่น ตามมาตรฐานกรมทางหลวง (DOH Thailand)**
     
-    สำหรับการเรียนการสอนและการออกแบบจริง | For Teaching and Professional Design
+    ✅ คำนวณความหนาขั้นต่ำแต่ละชั้น | ✅ แสดงขั้นตอนการคำนวณ | ✅ Export รายงาน Word
     """)
     
     st.markdown("---")
     
-    # Sidebar: Project Information
+    # ========================================
+    # SIDEBAR: Project Info & Material Database
+    # ========================================
     with st.sidebar:
         st.header("📋 ข้อมูลโครงการ")
-        project_title = st.text_input(
-            "ชื่อโครงการ",
-            value="Flexible Pavement Design Project"
-        )
+        project_title = st.text_input("ชื่อโครงการ", value="โครงการออกแบบถนน")
         
         st.markdown("---")
-        st.header("📚 Material Database")
+        st.header("📚 ฐานข้อมูลวัสดุ (ทล.)")
         
-        with st.expander("ดูข้อมูลวัสดุทั้งหมด"):
+        with st.expander("ดูค่า สปส. วัสดุทั้งหมด"):
+            st.markdown("**ค่า สปส. สำหรับออกแบบ**")
             for mat_name, props in MATERIALS.items():
-                st.markdown(f"**{props['name_th']}**")
-                st.markdown(f"- E = {props['elastic_modulus_mpa']:,} MPa ({props['elastic_modulus_psi']:,} psi)")
-                st.markdown(f"- a = {props['layer_coeff']}")
-                st.markdown(f"- m range: {props['drainage_range']}")
-                st.markdown("---")
+                if props['layer_coeff'] > 0:
+                    st.markdown(f"**{mat_name}**")
+                    st.markdown(f"- a = {props['layer_coeff']}, m = {props['drainage_coeff']}")
+                    st.markdown(f"- MR = {props['mr_psi']:,} psi ({props['mr_mpa']:,} MPa)")
+                    st.markdown("---")
     
-    # Main content: Two columns
+    # ========================================
+    # MAIN CONTENT: Two columns
+    # ========================================
     col1, col2 = st.columns([1, 1])
     
     # ========================================
@@ -748,24 +768,27 @@ def main():
     with col1:
         st.header("📝 Design Inputs")
         
-        # Traffic & Reliability Section
+        # Traffic
         st.subheader("1️⃣ Traffic & Reliability")
         
         W18 = st.number_input(
             "Design ESALs (W₁₈)",
-            min_value=1000,
-            max_value=100000000,
+            min_value=100000,
+            max_value=250000000,
             value=5000000,
             step=100000,
             format="%d",
-            help="จำนวน 18-kip ESAL ตลอดอายุการใช้งาน"
+            help="จำนวน 18-kip ESAL ตลอดอายุการใช้งาน (สูงสุด 250 ล้าน)"
         )
+        
+        # แสดงค่า ESAL เป็นล้าน (ภาษาไทย)
+        esal_million = W18 / 1000000
+        st.caption(f"💡 W₁₈ = **{esal_million:,.2f} ล้าน** ESALs")
         
         reliability = st.selectbox(
             "Reliability Level (R)",
             options=list(RELIABILITY_ZR.keys()),
             index=list(RELIABILITY_ZR.keys()).index(90),
-            help="ระดับความเชื่อมั่นในการออกแบบ"
         )
         Zr = RELIABILITY_ZR[reliability]
         st.info(f"Zᵣ = {Zr:.3f}")
@@ -776,311 +799,347 @@ def main():
             max_value=0.60,
             value=0.45,
             step=0.01,
-            format="%.2f",
-            help="ค่าเบี่ยงเบนมาตรฐานรวม (typical: 0.40-0.50 for flexible)"
+            format="%.2f"
         )
         
-        # Serviceability Section
+        # Serviceability
         st.subheader("2️⃣ Serviceability")
         
         col1a, col1b = st.columns(2)
         with col1a:
-            P0 = st.number_input(
-                "Initial Serviceability (P₀)",
-                min_value=3.0,
-                max_value=5.0,
-                value=4.2,
-                step=0.1,
-                format="%.1f",
-                help="ค่า Serviceability เริ่มต้น (typical: 4.2)"
-            )
-        
+            P0 = st.number_input("P₀ (Initial)", min_value=3.0, max_value=5.0, value=4.2, step=0.1)
         with col1b:
-            Pt = st.number_input(
-                "Terminal Serviceability (Pₜ)",
-                min_value=1.5,
-                max_value=3.5,
-                value=2.5,
-                step=0.1,
-                format="%.1f",
-                help="ค่า Serviceability สิ้นสุด (typical: 2.0-2.5)"
-            )
+            Pt = st.number_input("Pₜ (Terminal)", min_value=1.5, max_value=3.5, value=2.5, step=0.1)
         
         delta_psi = P0 - Pt
-        st.success(f"ΔPSI = P₀ - Pₜ = {P0:.1f} - {Pt:.1f} = **{delta_psi:.1f}**")
+        st.success(f"**ΔPSI = {delta_psi:.1f}**")
         
-        # Subgrade Section
-        st.subheader("3️⃣ Subgrade")
+        # Subgrade
+        st.subheader("3️⃣ Subgrade (ดินเดิม/ดินถม)")
         
-        Mr_input_type = st.radio(
-            "วิธีกรอกค่า Subgrade Resilient Modulus",
-            options=["กรอกค่า Mr โดยตรง (psi)", "คำนวณจาก CBR"],
-            horizontal=True
+        CBR = st.number_input(
+            "CBR (%)",
+            min_value=1.0,
+            max_value=30.0,
+            value=5.0,
+            step=0.5,
+            help="ค่า CBR ของดินเดิมหรือดินถมคันทาง"
         )
         
-        if Mr_input_type == "กรอกค่า Mr โดยตรง (psi)":
-            Mr = st.number_input(
-                "Subgrade Resilient Modulus (Mᵣ) [psi]",
-                min_value=1000,
-                max_value=50000,
-                value=5000,
-                step=500,
-                format="%d",
-                help="ค่า Resilient Modulus ของดินเดิม"
-            )
-        else:
-            CBR = st.number_input(
-                "CBR (%)",
-                min_value=1.0,
-                max_value=30.0,
-                value=5.0,
-                step=0.5,
-                format="%.1f"
-            )
-            # AASHTO correlation: Mr = 1500 × CBR (for CBR ≤ 10%)
-            # or Mr = 2555 × CBR^0.64 (more general)
-            if CBR <= 10:
-                Mr = int(1500 * CBR)
-            else:
-                Mr = int(2555 * (CBR ** 0.64))
-            st.info(f"Mᵣ (คำนวณจาก CBR) = **{Mr:,} psi** ({Mr * 0.006895:.1f} MPa)")
+        # Mr = 1500 × CBR (ตามมาตรฐาน ทล.)
+        Mr = int(1500 * CBR)
+        st.info(f"**Mᵣ = 1,500 × CBR = 1,500 × {CBR:.1f} = {Mr:,} psi**")
     
     # ========================================
     # COLUMN 2: Layer Configuration
     # ========================================
     with col2:
         st.header("🏗️ Layer Configuration")
-        st.subheader("4️⃣ Pavement Layers")
         
+        # จำนวนชั้นทาง
         num_layers = st.slider(
             "จำนวนชั้นทาง",
             min_value=2,
-            max_value=5,
-            value=3,
-            help="เลือกจำนวนชั้นทาง (2-5 ชั้น)"
+            max_value=6,
+            value=4,
+            help="เลือกจำนวนชั้นทาง (2-6 ชั้น)"
         )
         
-        layers = []
+        # สร้าง list วัสดุทั้งหมด (ยกเว้น "ไม่ใช้")
+        all_materials = [m for m, p in MATERIALS.items() if p['layer_type'] != 'none']
         
-        for i in range(num_layers):
-            st.markdown(f"##### ชั้นที่ {i+1}")
+        # สร้าง list วัสดุสำหรับชั้นที่ 2-6 (รวม "ไม่ใช้ชั้นนี้")
+        optional_materials = all_materials + ["ไม่ใช้ชั้นนี้"]
+        
+        # เก็บข้อมูลชั้นทาง
+        layer_data = []
+        
+        # เก็บ placeholders สำหรับแสดงสถานะ
+        status_placeholders = {}
+        
+        # ========== ชั้นที่ 1: ผิวทาง (บังคับ) ==========
+        st.subheader("4️⃣ ชั้นที่ 1: ผิวทาง (Surface)")
+        
+        surface_materials = [m for m, p in MATERIALS.items() if p['layer_type'] == 'surface']
+        
+        layer1_mat = st.selectbox(
+            "เลือกวัสดุ",
+            options=surface_materials,
+            index=0,
+            key="layer1_mat"
+        )
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            layer1_thick = st.number_input(
+                "ความหนา (cm)", min_value=1.0, max_value=30.0, value=5.0, step=1.0,
+                key="layer1_thick"
+            )
+        with col_b:
+            layer1_m = st.number_input(
+                "m₁", min_value=0.5, max_value=1.5, value=1.0, step=0.05,
+                key="layer1_m"
+            )
+        
+        mat_props = MATERIALS[layer1_mat]
+        st.caption(f"a₁ = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi ({mat_props['mr_mpa']:,} MPa)")
+        
+        # Placeholder สำหรับแสดงสถานะชั้นที่ 1
+        status_placeholders[1] = st.empty()
+        
+        layer_data.append({
+            'material': layer1_mat,
+            'thickness_cm': layer1_thick,
+            'drainage_coeff': layer1_m
+        })
+        
+        # ========== ชั้นที่ 2-6: เลือกวัสดุได้ทุกชนิด ==========
+        default_materials = [
+            "พื้นทางซีเมนต์ CTB",
+            "รองพื้นทางวัสดุมวลรวม CBR 25%",
+            "วัสดุคัดเลือก ก",
+            "วัสดุคัดเลือก ก",
+            "วัสดุคัดเลือก ก"
+        ]
+        default_thickness = [15.0, 15.0, 30.0, 30.0, 30.0]
+        
+        for i in range(2, num_layers + 1):
+            st.markdown("---")
+            layer_icons = ['5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+            st.subheader(f"{layer_icons[i-2]} ชั้นที่ {i}")
             
-            col2a, col2b, col2c = st.columns([2, 1, 1])
+            # Default index
+            default_idx = all_materials.index(default_materials[i-2]) if default_materials[i-2] in all_materials else 0
             
-            with col2a:
-                material = st.selectbox(
-                    f"วัสดุ",
-                    options=list(MATERIALS.keys()),
-                    index=min(i, len(MATERIALS)-1),
-                    key=f"material_{i}",
-                    help="เลือกประเภทวัสดุ"
-                )
-            
-            with col2b:
-                thickness = st.number_input(
-                    f"ความหนา (cm)",
-                    min_value=1.0,
-                    max_value=50.0,
-                    value=10.0 if i == 0 else (20.0 if i == 1 else 15.0),
-                    step=1.0,
-                    key=f"thickness_{i}",
-                    format="%.1f"
-                )
-            
-            with col2c:
-                mat_props = MATERIALS[material]
-                m_range = mat_props['drainage_range']
-                
-                drainage = st.number_input(
-                    f"mᵢ",
-                    min_value=m_range[0],
-                    max_value=m_range[1],
-                    value=(m_range[0] + m_range[1]) / 2 if i > 0 else 1.0,
-                    step=0.05,
-                    key=f"drainage_{i}",
-                    format="%.2f",
-                    help=f"Drainage coefficient (range: {m_range[0]:.2f} - {m_range[1]:.2f})"
-                )
-            
-            # Display material properties
-            st.caption(
-                f"E = {mat_props['elastic_modulus_mpa']:,} MPa ({mat_props['elastic_modulus_psi']:,} psi) | "
-                f"a = {mat_props['layer_coeff']}"
+            layer_mat = st.selectbox(
+                f"เลือกวัสดุชั้นที่ {i}",
+                options=all_materials,
+                index=min(default_idx, len(all_materials)-1),
+                key=f"layer{i}_mat"
             )
             
-            layers.append({
-                'material': material,
-                'thickness_cm': thickness,
-                'drainage_coeff': drainage
-            })
+            col_c, col_d = st.columns(2)
+            with col_c:
+                layer_thick = st.number_input(
+                    "ความหนา (cm)",
+                    min_value=1.0, max_value=150.0, value=default_thickness[i-2], step=5.0,
+                    key=f"layer{i}_thick"
+                )
+            with col_d:
+                layer_m = st.number_input(
+                    f"m{i}",
+                    min_value=0.5, max_value=1.5, value=1.0, step=0.05,
+                    key=f"layer{i}_m"
+                )
             
-            st.markdown("---")
+            mat_props = MATERIALS[layer_mat]
+            st.caption(f"a{i} = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi ({mat_props['mr_mpa']:,} MPa)")
+            
+            # Placeholder สำหรับแสดงสถานะชั้นที่ i
+            status_placeholders[i] = st.empty()
+            
+            layer_data.append({
+                'material': layer_mat,
+                'thickness_cm': layer_thick,
+                'drainage_coeff': layer_m
+            })
+    
+    # ========================================
+    # BUILD LAYERS LIST
+    # ========================================
+    layers = layer_data
+    
+    # Store inputs
+    inputs = {
+        'W18': W18, 'reliability': reliability, 'Zr': Zr, 'So': So,
+        'P0': P0, 'Pt': Pt, 'delta_psi': delta_psi, 'CBR': CBR, 'Mr': Mr
+    }
     
     # ========================================
     # CALCULATION & RESULTS
     # ========================================
-    st.header("📊 Results & Verification")
+    st.markdown("---")
+    st.header("📊 ผลการคำนวณ (Calculation Results)")
     
-    # Store inputs for report
-    inputs = {
-        'W18': W18,
-        'reliability': reliability,
-        'Zr': Zr,
-        'So': So,
-        'P0': P0,
-        'Pt': Pt,
-        'delta_psi': delta_psi,
-        'Mr': Mr
-    }
+    # Calculate layer thicknesses
+    calc_results = calculate_layer_thicknesses(W18, Zr, So, delta_psi, Mr, layers)
     
-    # Calculate SN required
-    sn_req_result = calculate_sn_required(W18, Zr, So, delta_psi, Mr)
-    sn_required = sn_req_result['SN_required']
+    # Design check
+    design_check = check_design(
+        calc_results['total_sn_required'],
+        calc_results['total_sn_provided']
+    )
     
-    # Calculate SN provided
-    sn_prov_result = calculate_sn_provided(layers)
-    sn_provided = sn_prov_result['SN_provided']
+    # ========================================
+    # FILL STATUS PLACEHOLDERS
+    # ========================================
+    for layer in calc_results['layers']:
+        layer_no = layer['layer_no']
+        if layer_no in status_placeholders:
+            with status_placeholders[layer_no]:
+                if layer['is_ok']:
+                    st.success(f"✅ ผ่าน (ต้องการ ≥ {layer['min_thickness_cm']:.1f} cm)")
+                else:
+                    shortage = layer['min_thickness_cm'] - layer['design_thickness_cm']
+                    st.error(f"❌ ไม่ผ่าน (ต้องเพิ่มอีก {shortage:.1f} cm)")
     
-    # Check design
-    design_check = check_design(sn_required, sn_provided)
+    # ========================================
+    # STEP-BY-STEP CALCULATION DISPLAY
+    # ========================================
+    st.subheader("🔢 ขั้นตอนการคำนวณความหนาแต่ละชั้น")
     
-    # Display results in columns
-    res_col1, res_col2, res_col3 = st.columns(3)
+    for layer in calc_results['layers']:
+        with st.container():
+            # Header with colored background
+            layer_status = "✅" if layer['is_ok'] else "❌"
+            st.markdown(f"### {layer_status} ชั้นที่ {layer['layer_no']}: {layer['material']}")
+            
+            col_a, col_b = st.columns([1, 1])
+            
+            with col_a:
+                st.markdown("**ข้อมูลวัสดุ:**")
+                st.markdown(f"- Mᵣ (psi) = **{layer['mr_psi']:,}**")
+                st.markdown(f"- Layer Coefficient (a{layer['layer_no']}) = **{layer['a_i']:.2f}**")
+                st.markdown(f"- Drain Coefficient (m{layer['layer_no']}) = **{layer['m_i']:.2f}**")
+            
+            with col_b:
+                st.markdown("**จากสมการ AASHTO:**")
+                
+                # Show SN calculation
+                sn_at_layer = layer['sn_required_at_layer']
+                
+                if layer['layer_no'] == 1:
+                    st.latex(f"SN_{{{layer['layer_no']}}} = {sn_at_layer:.2f}")
+                else:
+                    st.latex(f"SN_{{{layer['layer_no']}}} = {sn_at_layer:.2f}")
+            
+            # Thickness calculation formula
+            st.markdown("**คำนวณความหนาผิวทาง:**")
+            
+            if layer['layer_no'] == 1:
+                # First layer formula
+                st.latex(f"D_{{1}} \\geq \\frac{{SN_{{1}}}}{{a_{{1}} \\times m_{{1}}}} = \\frac{{{sn_at_layer:.2f}}}{{{layer['a_i']:.2f} \\times {layer['m_i']:.2f}}} = {layer['min_thickness_inch']:.2f} \\text{{ นิ้ว}}")
+            else:
+                # Subsequent layers
+                prev_sn = calc_results['layers'][layer['layer_no']-2]['cumulative_sn']
+                st.latex(f"D_{{{layer['layer_no']}}} \\geq \\frac{{SN_{{{layer['layer_no']}}} - SN_{{prev}}}}{{a_{{{layer['layer_no']}}} \\times m_{{{layer['layer_no']}}}}} = \\frac{{{sn_at_layer:.2f} - {prev_sn:.2f}}}{{{layer['a_i']:.2f} \\times {layer['m_i']:.2f}}} = {layer['min_thickness_inch']:.2f} \\text{{ นิ้ว}}")
+            
+            # Results table
+            result_cols = st.columns(4)
+            
+            with result_cols[0]:
+                st.metric("ความหนาขั้นต่ำ", f"{layer['min_thickness_cm']:.1f} cm")
+            
+            with result_cols[1]:
+                st.metric("ความหนาที่เลือก", f"{layer['design_thickness_cm']:.0f} cm", 
+                         delta=f"{layer['design_thickness_cm'] - layer['min_thickness_cm']:.1f} cm")
+            
+            with result_cols[2]:
+                st.metric("SN contribution", f"{layer['sn_contribution']:.3f}")
+            
+            with result_cols[3]:
+                st.metric("Cumulative SN", f"{layer['cumulative_sn']:.2f}")
+            
+            # Status
+            if layer['is_ok']:
+                st.success(f"✅ **OK** - ความหนาเพียงพอ ({layer['design_thickness_cm']:.0f} ≥ {layer['min_thickness_cm']:.1f} cm)")
+            else:
+                st.error(f"❌ **NG** - ต้องเพิ่มความหนาอีก {layer['min_thickness_cm'] - layer['design_thickness_cm']:.1f} cm")
+            
+            st.markdown("---")
+    
+    # ========================================
+    # SUMMARY RESULTS
+    # ========================================
+    st.subheader("📈 สรุปผลการออกแบบ")
+    
+    res_col1, res_col2, res_col3, res_col4 = st.columns(4)
     
     with res_col1:
-        st.metric(
-            label="SN Required",
-            value=f"{sn_required:.3f}" if sn_required else "Error"
-        )
+        st.metric("SN Required", f"{calc_results['total_sn_required']:.2f}")
     
     with res_col2:
-        st.metric(
-            label="SN Provided",
-            value=f"{sn_provided:.3f}"
-        )
+        st.metric("SN Provided", f"{calc_results['total_sn_provided']:.2f}")
     
     with res_col3:
         if design_check['passed']:
-            st.metric(
-                label="Safety Margin",
-                value=f"{design_check['safety_margin']:.3f}",
-                delta="PASS"
-            )
+            st.metric("Safety Margin", f"{design_check['safety_margin']:.2f}", delta="OK")
         else:
-            st.metric(
-                label="Safety Margin",
-                value=f"{design_check['safety_margin']:.3f}",
-                delta="FAIL",
-                delta_color="inverse"
-            )
+            st.metric("Safety Margin", f"{design_check['safety_margin']:.2f}", delta="NG", delta_color="inverse")
+    
+    with res_col4:
+        if design_check['passed']:
+            st.success("**PASS** ✅")
+        else:
+            st.error("**FAIL** ❌")
     
     # Status message
     if design_check['passed']:
-        st.success(f"✅ **PASS**: {design_check['message']}")
+        st.success(f"✅ การออกแบบผ่านเกณฑ์: {design_check['message']}")
     else:
-        st.error(f"❌ **FAIL**: {design_check['message']}")
+        st.error(f"❌ การออกแบบไม่ผ่าน: {design_check['message']}")
     
     # ========================================
-    # PAVEMENT SECTION VISUALIZATION
+    # PAVEMENT SECTION FIGURE
     # ========================================
-    st.header("📐 Pavement Section Diagram")
+    st.subheader("📐 ภาพตัดขวางโครงสร้างถนน")
     
-    fig = plot_pavement_section(layers)
+    fig = plot_pavement_section(calc_results['layers'], Mr)
     st.pyplot(fig)
     
     # ========================================
-    # STEP-BY-STEP CALCULATION (Expandable)
+    # SN CALCULATION TABLE
     # ========================================
-    with st.expander("📖 แสดงขั้นตอนการคำนวณ (Step-by-Step Calculation)"):
-        st.subheader("Step 1: Input Parameters")
-        st.markdown(f"""
-        | Parameter | Value | Unit |
-        |-----------|-------|------|
-        | W₁₈ | {W18:,} | 18-kip ESAL |
-        | R | {reliability} | % |
-        | Zᵣ | {Zr:.3f} | - |
-        | Sₒ | {So:.2f} | - |
-        | P₀ | {P0:.1f} | - |
-        | Pₜ | {Pt:.1f} | - |
-        | ΔPSI | {delta_psi:.1f} | - |
-        | Mᵣ | {Mr:,} | psi |
-        """)
+    with st.expander("📋 ตารางสรุปการคำนวณ SN"):
+        st.markdown("### SN Contribution Table")
         
-        st.subheader("Step 2: AASHTO 1993 Equation")
-        st.latex(r'''
-        \log_{10}(W_{18}) = Z_r S_o + 9.36 \log_{10}(SN+1) - 0.20 
-        + \frac{\log_{10}(\Delta PSI / (4.2-1.5))}{0.4 + \frac{1094}{(SN+1)^{5.19}}}
-        + 2.32 \log_{10}(M_r) - 8.07
-        ''')
-        
-        st.subheader("Step 3: Iterative Solution for SN_required")
-        st.markdown(f"""
-        Using Brent's method to solve for SN:
-        - **Initial search range**: 0.1 to 20.0
-        - **Tolerance**: 1×10⁻⁶
-        - **Solution**: SN_required = **{sn_required:.3f}**
-        """)
-        
-        st.subheader("Step 4: Layer SN Contributions")
-        st.markdown("**Formula**: SN_provided = Σ(aᵢ × Dᵢ × mᵢ)")
-        
-        # Layer table
-        layer_data = []
-        for detail in sn_prov_result['layer_details']:
-            layer_data.append({
-                'Layer': detail['layer_no'],
-                'Material': detail['material'],
-                'D (cm)': detail['thickness_cm'],
-                'D (in)': f"{detail['thickness_inch']:.3f}",
-                'aᵢ': detail['layer_coeff'],
-                'mᵢ': detail['drainage_coeff'],
-                'SN contribution': f"{detail['sn_contribution']:.4f}"
+        table_data = []
+        for layer in calc_results['layers']:
+            table_data.append({
+                'ชั้น': layer['layer_no'],
+                'วัสดุ': layer['short_name'],
+                'aᵢ': layer['a_i'],
+                'Dᵢ (cm)': layer['design_thickness_cm'],
+                'Dᵢ (in)': layer['design_thickness_inch'],
+                'mᵢ': layer['m_i'],
+                'SN contrib.': layer['sn_contribution'],
+                'SN cumul.': layer['cumulative_sn']
             })
         
-        st.table(layer_data)
+        st.table(table_data)
         
-        st.markdown(f"**Total SN_provided = {sn_provided:.3f}**")
-        
-        st.subheader("Step 5: Design Verification")
         st.markdown(f"""
-        | Check | Value |
-        |-------|-------|
-        | SN_required | {sn_required:.3f} |
-        | SN_provided | {sn_provided:.3f} |
-        | SN_provided ≥ SN_required | {design_check['passed']} |
-        | Safety Margin | {design_check['safety_margin']:.3f} |
-        | **Result** | **{design_check['status']}** |
+        **สูตรการคำนวณ:**
+        
+        $$SN = \\sum_{{i=1}}^{{n}} a_i \\times D_i \\times m_i$$
+        
+        **ผลลัพธ์:**
+        - SN_provided = {calc_results['total_sn_provided']:.2f}
+        - SN_required = {calc_results['total_sn_required']:.2f}
         """)
     
     # ========================================
-    # EXPORT REPORT
+    # EXPORT
     # ========================================
-    st.header("📄 Export Report")
+    st.subheader("📄 Export Report")
     
-    col_export1, col_export2 = st.columns(2)
+    col_exp1, col_exp2 = st.columns(2)
     
-    with col_export1:
-        if st.button("📝 Generate Word Report (.docx)", type="primary"):
+    with col_exp1:
+        if st.button("📝 Generate Word Report", type="primary"):
             with st.spinner("กำลังสร้างรายงาน..."):
                 doc_bytes = create_word_report(
-                    project_title=project_title,
-                    inputs=inputs,
-                    layers=layers,
-                    sn_required=sn_required,
-                    sn_provided=sn_prov_result,
-                    design_check=design_check,
-                    fig=fig
+                    project_title, inputs, calc_results, design_check, fig
                 )
                 
                 st.download_button(
                     label="⬇️ Download Word Report",
                     data=doc_bytes,
-                    file_name=f"AASHTO_Flexible_Design_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
+                    file_name=f"AASHTO_Flexible_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
     
-    with col_export2:
-        # PNG download for figure
+    with col_exp2:
         fig_bytes = get_figure_as_bytes(fig)
         st.download_button(
             label="📸 Download Section Diagram (PNG)",
@@ -1089,15 +1148,12 @@ def main():
             mime="image/png"
         )
     
-    # ========================================
-    # FOOTER
-    # ========================================
+    # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: gray;'>
     <p>AASHTO 1993 Flexible Pavement Design Application</p>
-    <p>พัฒนาสำหรับการเรียนการสอนและการออกแบบจริง</p>
-    <p>Based on: AASHTO Guide for Design of Pavement Structures (1993)</p>
+    <p>พัฒนาตามมาตรฐานกรมทางหลวง (DOH Thailand)</p>
     </div>
     """, unsafe_allow_html=True)
 
