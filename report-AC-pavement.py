@@ -899,7 +899,8 @@ def main():
         
         for i in range(2, num_layers + 1):
             st.markdown("---")
-            st.subheader(f"{'5️⃣6️⃣7️⃣8️⃣9️⃣'[i-2]} ชั้นที่ {i}")
+            layer_icons = ['5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+            st.subheader(f"{layer_icons[i-2]} ชั้นที่ {i}")
             
             # Default index
             default_idx = all_materials.index(default_materials[i-2]) if default_materials[i-2] in all_materials else 0
