@@ -124,8 +124,8 @@ MATERIALS = {
     "วัสดุคัดเลือก ก": {
         "layer_coeff": 0.08,
         "drainage_coeff": 1.0,
-        "mr_psi": 11020,
-        "mr_mpa": 76,
+        "mr_psi": 14504,
+        "mr_mpa": 100,
         "layer_type": "selected",
         "color": "#BCAAA4",
         "short_name": "SM-A"
@@ -836,143 +836,108 @@ def main():
     with col2:
         st.header("🏗️ Layer Configuration")
         
-        # Surface Layer
-        st.subheader("4️⃣ ชั้นผิวทาง (Surface)")
+        # จำนวนชั้นทาง
+        num_layers = st.slider(
+            "จำนวนชั้นทาง",
+            min_value=2,
+            max_value=6,
+            value=4,
+            help="เลือกจำนวนชั้นทาง (2-6 ชั้น)"
+        )
+        
+        # สร้าง list วัสดุทั้งหมด (ยกเว้น "ไม่ใช้")
+        all_materials = [m for m, p in MATERIALS.items() if p['layer_type'] != 'none']
+        
+        # สร้าง list วัสดุสำหรับชั้นที่ 2-6 (รวม "ไม่ใช้ชั้นนี้")
+        optional_materials = all_materials + ["ไม่ใช้ชั้นนี้"]
+        
+        # เก็บข้อมูลชั้นทาง
+        layer_data = []
+        
+        # ========== ชั้นที่ 1: ผิวทาง (บังคับ) ==========
+        st.subheader("4️⃣ ชั้นที่ 1: ผิวทาง (Surface)")
         
         surface_materials = [m for m, p in MATERIALS.items() if p['layer_type'] == 'surface']
         
-        surface_mat = st.selectbox(
-            "เลือกวัสดุชั้นผิวทาง",
+        layer1_mat = st.selectbox(
+            "เลือกวัสดุ",
             options=surface_materials,
             index=0,
-            key="surface_mat"
+            key="layer1_mat"
         )
         
-        col2a, col2b = st.columns(2)
-        with col2a:
-            surface_thickness = st.number_input(
-                "ความหนา (cm)",
-                min_value=1.0, max_value=30.0, value=5.0, step=1.0,
-                key="surface_thick"
+        col_a, col_b = st.columns(2)
+        with col_a:
+            layer1_thick = st.number_input(
+                "ความหนา (cm)", min_value=1.0, max_value=30.0, value=5.0, step=1.0,
+                key="layer1_thick"
             )
-        with col2b:
-            surface_m = st.number_input(
-                "m₁",
-                min_value=0.5, max_value=1.5, value=1.0, step=0.05,
-                key="surface_m"
+        with col_b:
+            layer1_m = st.number_input(
+                "m₁", min_value=0.5, max_value=1.5, value=1.0, step=0.05,
+                key="layer1_m"
             )
         
-        mat_props = MATERIALS[surface_mat]
-        st.caption(f"a₁ = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi")
+        mat_props = MATERIALS[layer1_mat]
+        st.caption(f"a₁ = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi ({mat_props['mr_mpa']:,} MPa)")
         
-        st.markdown("---")
+        layer_data.append({
+            'material': layer1_mat,
+            'thickness_cm': layer1_thick,
+            'drainage_coeff': layer1_m
+        })
         
-        # Base Layer
-        st.subheader("5️⃣ ชั้นพื้นทาง (Base)")
+        # ========== ชั้นที่ 2-6: เลือกวัสดุได้ทุกชนิด ==========
+        default_materials = [
+            "พื้นทางซีเมนต์ CTB",
+            "รองพื้นทางวัสดุมวลรวม CBR 25%",
+            "วัสดุคัดเลือก ก",
+            "วัสดุคัดเลือก ก",
+            "วัสดุคัดเลือก ก"
+        ]
+        default_thickness = [15.0, 15.0, 30.0, 30.0, 30.0]
         
-        base_materials = [m for m, p in MATERIALS.items() if p['layer_type'] == 'base']
-        
-        base_mat = st.selectbox(
-            "เลือกวัสดุชั้นพื้นทาง",
-            options=base_materials,
-            index=0,
-            key="base_mat"
-        )
-        
-        col2c, col2d = st.columns(2)
-        with col2c:
-            base_thickness = st.number_input(
-                "ความหนา (cm)",
-                min_value=1.0, max_value=50.0, value=15.0, step=1.0,
-                key="base_thick"
+        for i in range(2, num_layers + 1):
+            st.markdown("---")
+            st.subheader(f"{'5️⃣6️⃣7️⃣8️⃣9️⃣'[i-2]} ชั้นที่ {i}")
+            
+            # Default index
+            default_idx = all_materials.index(default_materials[i-2]) if default_materials[i-2] in all_materials else 0
+            
+            layer_mat = st.selectbox(
+                f"เลือกวัสดุชั้นที่ {i}",
+                options=all_materials,
+                index=min(default_idx, len(all_materials)-1),
+                key=f"layer{i}_mat"
             )
-        with col2d:
-            base_m = st.number_input(
-                "m₂",
-                min_value=0.5, max_value=1.5, value=1.0, step=0.05,
-                key="base_m"
-            )
-        
-        mat_props = MATERIALS[base_mat]
-        st.caption(f"a₂ = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi")
-        
-        st.markdown("---")
-        
-        # Subbase Layer
-        st.subheader("6️⃣ ชั้นรองพื้นทาง (Subbase)")
-        
-        subbase_materials = [m for m, p in MATERIALS.items() if p['layer_type'] == 'subbase']
-        
-        subbase_mat = st.selectbox(
-            "เลือกวัสดุชั้นรองพื้นทาง",
-            options=subbase_materials,
-            index=0,
-            key="subbase_mat"
-        )
-        
-        col2e, col2f = st.columns(2)
-        with col2e:
-            subbase_thickness = st.number_input(
-                "ความหนา (cm)",
-                min_value=1.0, max_value=50.0, value=15.0, step=1.0,
-                key="subbase_thick"
-            )
-        with col2f:
-            subbase_m = st.number_input(
-                "m₃",
-                min_value=0.5, max_value=1.5, value=1.0, step=0.05,
-                key="subbase_m"
-            )
-        
-        mat_props = MATERIALS[subbase_mat]
-        st.caption(f"a₃ = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi")
-        
-        st.markdown("---")
-        
-        # Selected Material Layer
-        st.subheader("7️⃣ วัสดุคัดเลือก (Selected Material)")
-        
-        selected_materials = [m for m, p in MATERIALS.items() if p['layer_type'] in ['selected', 'none']]
-        
-        selected_mat = st.selectbox(
-            "เลือกวัสดุคัดเลือก",
-            options=selected_materials,
-            index=1,  # Default to "ไม่ใช้"
-            key="selected_mat"
-        )
-        
-        if selected_mat != "ไม่ใช้วัสดุคัดเลือก (ใช้ดินทางทรพ)":
-            col2g, col2h = st.columns(2)
-            with col2g:
-                selected_thickness = st.number_input(
+            
+            col_c, col_d = st.columns(2)
+            with col_c:
+                layer_thick = st.number_input(
                     "ความหนา (cm)",
-                    min_value=1.0, max_value=100.0, value=30.0, step=5.0,
-                    key="selected_thick"
+                    min_value=1.0, max_value=150.0, value=default_thickness[i-2], step=5.0,
+                    key=f"layer{i}_thick"
                 )
-            with col2h:
-                selected_m = st.number_input(
-                    "m₄",
+            with col_d:
+                layer_m = st.number_input(
+                    f"m{i}",
                     min_value=0.5, max_value=1.5, value=1.0, step=0.05,
-                    key="selected_m"
+                    key=f"layer{i}_m"
                 )
             
-            mat_props = MATERIALS[selected_mat]
-            st.caption(f"a₄ = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi")
-        else:
-            selected_thickness = 0
-            selected_m = 1.0
+            mat_props = MATERIALS[layer_mat]
+            st.caption(f"a{i} = {mat_props['layer_coeff']}, MR = {mat_props['mr_psi']:,} psi ({mat_props['mr_mpa']:,} MPa)")
+            
+            layer_data.append({
+                'material': layer_mat,
+                'thickness_cm': layer_thick,
+                'drainage_coeff': layer_m
+            })
     
     # ========================================
     # BUILD LAYERS LIST
     # ========================================
-    layers = [
-        {'material': surface_mat, 'thickness_cm': surface_thickness, 'drainage_coeff': surface_m},
-        {'material': base_mat, 'thickness_cm': base_thickness, 'drainage_coeff': base_m},
-        {'material': subbase_mat, 'thickness_cm': subbase_thickness, 'drainage_coeff': subbase_m},
-    ]
-    
-    if selected_mat != "ไม่ใช้วัสดุคัดเลือก (ใช้ดินคันทาง)":
-        layers.append({'material': selected_mat, 'thickness_cm': selected_thickness, 'drainage_coeff': selected_m})
+    layers = layer_data
     
     # Store inputs
     inputs = {
