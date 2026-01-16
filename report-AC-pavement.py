@@ -352,7 +352,11 @@ def check_design(sn_required: float, sn_provided: float) -> dict:
 # ================================================================================
 
 def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt.Figure:
-    """Draw vertical pavement section diagram"""
+    """
+    Draw vertical pavement section diagram
+    
+    Layout: ความหนา (ซ้าย) | ชั้นวัสดุ | ชนิดวัสดุ (ขวา)
+    """
     
     if not layers_result:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -360,13 +364,13 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
         ax.axis('off')
         return fig
     
-    fig, ax = plt.subplots(figsize=(10, 10))
+    fig, ax = plt.subplots(figsize=(12, 10))
     
     total_thickness = sum([l['design_thickness_cm'] for l in layers_result])
-    subgrade_thickness = max(15, total_thickness * 0.25)
+    subgrade_thickness = max(15, total_thickness * 0.20)
     
-    layer_width = 6
-    x_center = 5
+    layer_width = 8
+    x_center = 6
     current_y = total_thickness + subgrade_thickness
     
     # Draw each layer
@@ -376,6 +380,7 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
         # Get color from MATERIALS
         mat = MATERIALS.get(layer['material'], {})
         color = mat.get('color', '#888888')
+        short_name = mat.get('short_name', layer.get('short_name', 'Layer'))
         
         # Create rectangle
         rect = mpatches.FancyBboxPatch(
@@ -387,32 +392,30 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
         )
         ax.add_patch(rect)
         
-        # Layer name (short)
-        short_name = layer['short_name']
-        text_color = 'white' if color in ['#2C3E50', '#1A252F', '#78909C', '#607D8B', '#795548', '#8D6E63', '#5D4037'] else 'black'
+        # Text color based on background
+        text_color = 'white' if color in ['#2C3E50', '#1A252F', '#78909C', '#607D8B', '#795548', '#8D6E63', '#5D4037', '#6D4C41'] else 'black'
         
-        ax.text(x_center, current_y - thickness_cm/2, 
-                short_name,
-                ha='center', va='center',
-                fontsize=14, fontweight='bold',
-                color=text_color)
-        
-        # Thickness annotation (right side)
+        # LEFT SIDE: Thickness (ความหนา)
         ax.annotate(
-            f'{thickness_cm:.0f} cm\n({layer["design_thickness_inch"]:.1f}")',
-            xy=(x_center + layer_width/2 + 0.1, current_y - thickness_cm/2),
-            xytext=(x_center + layer_width/2 + 2.0, current_y - thickness_cm/2),
-            fontsize=10, fontweight='bold',
+            f'{thickness_cm:.0f} cm',
+            xy=(x_center - layer_width/2 - 0.1, current_y - thickness_cm/2),
+            xytext=(x_center - layer_width/2 - 1.8, current_y - thickness_cm/2),
+            fontsize=12, fontweight='bold',
             arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
-            va='center', ha='left',
-            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', edgecolor='gray')
+            va='center', ha='right',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='lightyellow', edgecolor='orange', linewidth=1.5)
         )
         
-        # Layer coefficient (left side)
-        ax.text(x_center - layer_width/2 - 0.5, current_y - thickness_cm/2,
-                f'a{i+1}={layer["a_i"]:.2f}',
-                ha='right', va='center', fontsize=11, fontweight='bold',
-                bbox=dict(boxstyle='round,pad=0.2', facecolor='lightblue', edgecolor='gray'))
+        # RIGHT SIDE: Material short name (ชื่อย่อวัสดุ - English)
+        ax.annotate(
+            short_name,
+            xy=(x_center + layer_width/2 + 0.1, current_y - thickness_cm/2),
+            xytext=(x_center + layer_width/2 + 1.8, current_y - thickness_cm/2),
+            fontsize=12, fontweight='bold',
+            arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
+            va='center', ha='left',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcyan', edgecolor='steelblue', linewidth=1.5)
+        )
         
         current_y -= thickness_cm
     
@@ -425,11 +428,16 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
     )
     ax.add_patch(subgrade_rect)
     
-    subgrade_text = f'Subgrade\nMR={subgrade_mr:,.0f} psi' if subgrade_mr else 'Subgrade'
-    ax.text(x_center, current_y - subgrade_thickness/2,
-            subgrade_text,
-            ha='center', va='center',
-            fontsize=11, fontweight='bold', color='white')
+    # Subgrade label (right side only)
+    ax.annotate(
+        'Subgrade',
+        xy=(x_center + layer_width/2 + 0.1, current_y - subgrade_thickness/2),
+        xytext=(x_center + layer_width/2 + 1.8, current_y - subgrade_thickness/2),
+        fontsize=12, fontweight='bold',
+        arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
+        va='center', ha='left',
+        bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcyan', edgecolor='steelblue', linewidth=1.5)
+    )
     
     # Title
     ax.text(x_center, total_thickness + subgrade_thickness + 3,
@@ -437,7 +445,7 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
             ha='center', va='center',
             fontsize=16, fontweight='bold')
     
-    ax.set_xlim(-2, 14)
+    ax.set_xlim(-4, 18)
     ax.set_ylim(-5, total_thickness + subgrade_thickness + 5)
     ax.set_aspect('equal')
     ax.axis('off')
@@ -460,25 +468,41 @@ def get_figure_as_bytes(fig: plt.Figure) -> BytesIO:
 
 def create_word_report(project_title: str, inputs: dict, calc_results: dict,
                        design_check: dict, fig: plt.Figure) -> BytesIO:
-    """Create Word document report"""
+    """Create Word document report with step-by-step calculations"""
     
     doc = Document()
     
-    # Title
+    # ========================================
+    # TITLE
+    # ========================================
     title = doc.add_heading('รายงานการออกแบบ Flexible Pavement', level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     doc.add_heading(f'โครงการ: {project_title}', level=1)
     doc.add_paragraph(f'วันที่ออกแบบ: {datetime.now().strftime("%d/%m/%Y %H:%M")}')
     
-    # Section 1: Design Method
+    # ========================================
+    # SECTION 1: Design Method
+    # ========================================
     doc.add_heading('1. วิธีการออกแบบ', level=2)
     doc.add_paragraph(
         'การออกแบบโครงสร้างถนนใช้วิธี AASHTO 1993 Guide for Design of Pavement Structures '
-        'ตามมาตรฐานกรมทางหลวง'
+        'ตามมาตรฐานกรมทางหลวง โดยใช้สมการหลักดังนี้:'
     )
     
-    # Section 2: Input Parameters
+    # Main equation
+    eq_para = doc.add_paragraph()
+    eq_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    eq_run = eq_para.add_run(
+        'log₁₀(W₁₈) = Zᵣ·Sₒ + 9.36·log₁₀(SN+1) - 0.20 + '
+        'log₁₀(ΔPSI/2.7) / [0.4 + 1094/(SN+1)⁵·¹⁹] + 2.32·log₁₀(Mᵣ) - 8.07'
+    )
+    eq_run.italic = True
+    eq_run.font.size = Pt(11)
+    
+    # ========================================
+    # SECTION 2: Input Parameters
+    # ========================================
     doc.add_heading('2. ข้อมูลนำเข้า (Design Inputs)', level=2)
     
     input_table = doc.add_table(rows=1, cols=3)
@@ -486,18 +510,22 @@ def create_word_report(project_title: str, inputs: dict, calc_results: dict,
     
     headers = ['พารามิเตอร์', 'ค่า', 'หน่วย']
     for i, header in enumerate(headers):
-        input_table.rows[0].cells[i].text = header
+        cell = input_table.rows[0].cells[i]
+        cell.text = header
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                run.bold = True
     
     input_data = [
         ('Design ESALs (W₁₈)', f'{inputs["W18"]:,.0f}', '18-kip ESAL'),
         ('Reliability (R)', f'{inputs["reliability"]}', '%'),
-        ('Zᵣ', f'{inputs["Zr"]:.3f}', '-'),
-        ('Sₒ', f'{inputs["So"]:.2f}', '-'),
-        ('P₀', f'{inputs["P0"]:.1f}', '-'),
-        ('Pₜ', f'{inputs["Pt"]:.1f}', '-'),
-        ('ΔPSI', f'{inputs["delta_psi"]:.1f}', '-'),
+        ('Standard Normal Deviate (Zᵣ)', f'{inputs["Zr"]:.3f}', '-'),
+        ('Overall Standard Deviation (Sₒ)', f'{inputs["So"]:.2f}', '-'),
+        ('Initial Serviceability (P₀)', f'{inputs["P0"]:.1f}', '-'),
+        ('Terminal Serviceability (Pₜ)', f'{inputs["Pt"]:.1f}', '-'),
+        ('ΔPSI = P₀ - Pₜ', f'{inputs["delta_psi"]:.1f}', '-'),
         ('Subgrade CBR', f'{inputs.get("CBR", "-")}', '%'),
-        ('Subgrade Mᵣ', f'{inputs["Mr"]:,.0f}', 'psi'),
+        ('Subgrade Mᵣ = 1500 × CBR', f'{inputs["Mr"]:,.0f}', 'psi'),
     ]
     
     for param, value, unit in input_data:
@@ -506,55 +534,184 @@ def create_word_report(project_title: str, inputs: dict, calc_results: dict,
         row.cells[1].text = value
         row.cells[2].text = unit
     
-    # Section 3: Layer Thickness Calculation
-    doc.add_heading('3. การคำนวณความหนาชั้นทาง', level=2)
+    # ========================================
+    # SECTION 3: Material Properties
+    # ========================================
+    doc.add_heading('3. คุณสมบัติวัสดุชั้นทาง', level=2)
+    
+    mat_table = doc.add_table(rows=1, cols=5)
+    mat_table.style = 'Table Grid'
+    
+    mat_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'mᵢ', 'Mᵣ (psi)']
+    for i, header in enumerate(mat_headers):
+        cell = mat_table.rows[0].cells[i]
+        cell.text = header
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                run.bold = True
     
     for layer in calc_results['layers']:
+        row = mat_table.add_row()
+        row.cells[0].text = str(layer['layer_no'])
+        row.cells[1].text = layer['material']
+        row.cells[2].text = f'{layer["a_i"]:.2f}'
+        row.cells[3].text = f'{layer["m_i"]:.2f}'
+        row.cells[4].text = f'{layer["mr_psi"]:,}'
+    
+    # ========================================
+    # SECTION 4: Step-by-Step Calculation
+    # ========================================
+    doc.add_heading('4. ขั้นตอนการคำนวณความหนาชั้นทาง', level=2)
+    
+    doc.add_paragraph(
+        'การคำนวณความหนาขั้นต่ำของแต่ละชั้น ใช้หลักการว่า Structural Number (SN) '
+        'ที่จุดใดๆ ต้องมากกว่าหรือเท่ากับ SN ที่ต้องการ โดยคำนวณจากค่า Mᵣ ของชั้นถัดไป'
+    )
+    
+    for layer in calc_results['layers']:
+        # Layer header
         doc.add_heading(f'ชั้นที่ {layer["layer_no"]}: {layer["material"]}', level=3)
         
-        layer_table = doc.add_table(rows=6, cols=2)
-        layer_table.style = 'Table Grid'
+        # Material properties
+        doc.add_paragraph(f'ข้อมูลวัสดุ:')
+        props_para = doc.add_paragraph()
+        props_para.add_run(f'    • Mᵣ = {layer["mr_psi"]:,} psi\n')
+        props_para.add_run(f'    • Layer Coefficient (a{layer["layer_no"]}) = {layer["a_i"]:.2f}\n')
+        props_para.add_run(f'    • Drainage Coefficient (m{layer["layer_no"]}) = {layer["m_i"]:.2f}')
         
-        layer_data = [
-            ('Mᵣ (psi)', f'{layer["mr_psi"]:,.0f}'),
-            ('Layer Coefficient (aᵢ)', f'{layer["a_i"]:.2f}'),
-            ('Drainage Coefficient (mᵢ)', f'{layer["m_i"]:.2f}'),
-            (f'SN₍{layer["layer_no"]}₎ (จากสมการ)', f'{layer["sn_required_at_layer"]:.2f}'),
-            ('ความหนาขั้นต่ำ (Dₘᵢₙ)', f'{layer["min_thickness_inch"]:.2f} นิ้ว = {layer["min_thickness_cm"]:.1f} ซม.'),
-            ('ความหนาที่เลือกใช้ (D_design)', f'{layer["design_thickness_inch"]:.2f} นิ้ว = {layer["design_thickness_cm"]:.0f} ซม.'),
-        ]
+        # SN calculation
+        doc.add_paragraph(f'การคำนวณ SN:')
+        sn_para = doc.add_paragraph()
+        sn_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sn_run = sn_para.add_run(f'จากสมการ AASHTO 1993:  SN{layer["layer_no"]} = {layer["sn_required_at_layer"]:.2f}')
+        sn_run.bold = True
         
-        for i, (param, value) in enumerate(layer_data):
-            layer_table.rows[i].cells[0].text = param
-            layer_table.rows[i].cells[1].text = value
+        # Thickness calculation
+        doc.add_paragraph(f'การคำนวณความหนาขั้นต่ำ:')
         
-        status = 'OK' if layer['is_ok'] else 'NG - ต้องเพิ่มความหนา'
-        doc.add_paragraph(f'สถานะ: {status}')
+        if layer['layer_no'] == 1:
+            # First layer formula
+            formula_para = doc.add_paragraph()
+            formula_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            formula_text = f'D₁ ≥ SN₁ / (a₁ × m₁) = {layer["sn_required_at_layer"]:.2f} / ({layer["a_i"]:.2f} × {layer["m_i"]:.2f})'
+            formula_para.add_run(formula_text).italic = True
+        else:
+            # Get previous cumulative SN
+            prev_sn = calc_results['layers'][layer['layer_no']-2]['cumulative_sn']
+            
+            formula_para = doc.add_paragraph()
+            formula_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            formula_text = f'D{layer["layer_no"]} ≥ (SN{layer["layer_no"]} - SNₚᵣₑᵥ) / (a{layer["layer_no"]} × m{layer["layer_no"]}) = ({layer["sn_required_at_layer"]:.2f} - {prev_sn:.2f}) / ({layer["a_i"]:.2f} × {layer["m_i"]:.2f})'
+            formula_para.add_run(formula_text).italic = True
+        
+        # Results
+        result_para = doc.add_paragraph()
+        result_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        result_para.add_run(f'D{layer["layer_no"]}(min) = {layer["min_thickness_inch"]:.2f} นิ้ว = {layer["min_thickness_cm"]:.1f} ซม.').bold = True
+        
+        # Design thickness selection
+        doc.add_paragraph(f'เลือกใช้ความหนา:')
+        design_para = doc.add_paragraph()
+        design_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        design_para.add_run(f'D{layer["layer_no"]}(design) = {layer["design_thickness_cm"]:.0f} ซม. ({layer["design_thickness_inch"]:.2f} นิ้ว)').bold = True
+        
+        # SN contribution
+        doc.add_paragraph(f'SN contribution:')
+        contrib_para = doc.add_paragraph()
+        contrib_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contrib_text = f'ΔSN{layer["layer_no"]} = a{layer["layer_no"]} × D{layer["layer_no"]} × m{layer["layer_no"]} = {layer["a_i"]:.2f} × {layer["design_thickness_inch"]:.2f} × {layer["m_i"]:.2f} = {layer["sn_contribution"]:.3f}'
+        contrib_para.add_run(contrib_text)
+        
+        # Cumulative SN
+        cum_para = doc.add_paragraph()
+        cum_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cum_para.add_run(f'ΣSN = {layer["cumulative_sn"]:.2f}').bold = True
+        
+        # Check status
+        status_text = '✓ OK' if layer['is_ok'] else '✗ NG - ต้องเพิ่มความหนา'
+        status_para = doc.add_paragraph()
+        status_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        status_run = status_para.add_run(f'สถานะ: {status_text}')
+        status_run.bold = True
+        
+        doc.add_paragraph()  # Spacing
     
-    # Section 4: SN Summary
-    doc.add_heading('4. สรุป Structural Number', level=2)
+    # ========================================
+    # SECTION 5: SN Summary Table
+    # ========================================
+    doc.add_heading('5. ตารางสรุปการคำนวณ Structural Number', level=2)
     
-    sn_table = doc.add_table(rows=4, cols=2)
+    sn_table = doc.add_table(rows=1, cols=7)
     sn_table.style = 'Table Grid'
     
-    sn_data = [
-        ('SN Required', f'{calc_results["total_sn_required"]:.2f}'),
-        ('SN Provided', f'{calc_results["total_sn_provided"]:.2f}'),
+    sn_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'Dᵢ (นิ้ว)', 'mᵢ', 'ΔSNᵢ', 'ΣSN']
+    for i, header in enumerate(sn_headers):
+        cell = sn_table.rows[0].cells[i]
+        cell.text = header
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                run.bold = True
+    
+    for layer in calc_results['layers']:
+        row = sn_table.add_row()
+        row.cells[0].text = str(layer['layer_no'])
+        row.cells[1].text = layer['short_name']
+        row.cells[2].text = f'{layer["a_i"]:.2f}'
+        row.cells[3].text = f'{layer["design_thickness_inch"]:.2f}'
+        row.cells[4].text = f'{layer["m_i"]:.2f}'
+        row.cells[5].text = f'{layer["sn_contribution"]:.3f}'
+        row.cells[6].text = f'{layer["cumulative_sn"]:.2f}'
+    
+    # Formula
+    doc.add_paragraph()
+    formula_p = doc.add_paragraph()
+    formula_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    formula_p.add_run('สูตร: SN = Σ(aᵢ × Dᵢ × mᵢ)').italic = True
+    
+    # ========================================
+    # SECTION 6: Design Verification
+    # ========================================
+    doc.add_heading('6. ผลการตรวจสอบการออกแบบ', level=2)
+    
+    result_table = doc.add_table(rows=4, cols=2)
+    result_table.style = 'Table Grid'
+    
+    result_data = [
+        ('SN Required (จากสมการ AASHTO)', f'{calc_results["total_sn_required"]:.2f}'),
+        ('SN Provided (จากชั้นทาง)', f'{calc_results["total_sn_provided"]:.2f}'),
         ('Safety Margin', f'{design_check["safety_margin"]:.2f}'),
-        ('ผลการตรวจสอบ', design_check['status']),
+        ('ผลการตรวจสอบ', 'ผ่าน (OK)' if design_check['passed'] else 'ไม่ผ่าน (NG)'),
     ]
     
-    for i, (param, value) in enumerate(sn_data):
-        sn_table.rows[i].cells[0].text = param
-        sn_table.rows[i].cells[1].text = value
+    for i, (param, value) in enumerate(result_data):
+        result_table.rows[i].cells[0].text = param
+        result_table.rows[i].cells[1].text = value
     
-    # Section 5: Figure
-    doc.add_heading('5. ภาพตัดขวางโครงสร้างถนน', level=2)
+    # Conclusion
+    doc.add_paragraph()
+    if design_check['passed']:
+        conclusion = doc.add_paragraph()
+        conclusion.add_run(
+            f'สรุป: การออกแบบผ่านเกณฑ์ เนื่องจาก SN_provided ({calc_results["total_sn_provided"]:.2f}) ≥ '
+            f'SN_required ({calc_results["total_sn_required"]:.2f})'
+        ).bold = True
+    else:
+        conclusion = doc.add_paragraph()
+        conclusion.add_run(
+            f'สรุป: การออกแบบไม่ผ่านเกณฑ์ กรุณาปรับเพิ่มความหนาชั้นทาง'
+        ).bold = True
+    
+    # ========================================
+    # SECTION 7: Figure
+    # ========================================
+    doc.add_heading('7. ภาพตัดขวางโครงสร้างถนน', level=2)
     fig_bytes = get_figure_as_bytes(fig)
-    doc.add_picture(fig_bytes, width=Inches(5))
+    doc.add_picture(fig_bytes, width=Inches(6))
     doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    # Save
+    # ========================================
+    # Save document
+    # ========================================
     doc_bytes = BytesIO()
     doc.save(doc_bytes)
     doc_bytes.seek(0)
