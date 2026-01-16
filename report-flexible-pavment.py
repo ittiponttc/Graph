@@ -657,7 +657,7 @@ def create_word_report(project_title: str, inputs: dict, calc_results: dict,
     for layer in calc_results['layers']:
         row = sn_table.add_row()
         row.cells[0].text = str(layer['layer_no'])
-        row.cells[1].text = layer['short_name']
+        row.cells[1].text = layer['material']
         row.cells[2].text = f'{layer["a_i"]:.2f}'
         row.cells[3].text = f'{layer["design_thickness_inch"]:.2f}'
         row.cells[4].text = f'{layer["m_i"]:.2f}'
