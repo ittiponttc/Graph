@@ -10,7 +10,7 @@ Features:
 - Step-by-step thickness calculation (หาความหนาแต่ละชั้น)
 - Drainage coefficient default = 1.0
 
-Author: Civil Engineering Department
+Author: Teacher Training in Civil Engineering KMUTNB
 Version: 2.0
 ================================================================================
 """
@@ -1131,7 +1131,7 @@ def main():
     st.markdown("""
     <div style='text-align: center; color: gray;'>
     <p>AASHTO 1993 Flexible Pavement Design Application</p>
-    <p>พัฒนาตามมาตรฐานกรมทางหลวง (DOH Thailand)</p>
+    <p>พัฒนาโดย รศ.ดร.อิทธิพล มีผล ภาควิชาครุศาสตร์โยธา มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ</p>
     </div>
     """, unsafe_allow_html=True)
 
