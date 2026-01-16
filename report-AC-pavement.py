@@ -971,7 +971,7 @@ def main():
         {'material': subbase_mat, 'thickness_cm': subbase_thickness, 'drainage_coeff': subbase_m},
     ]
     
-    if selected_mat != "ไม่ใช้วัสดุคัดเลือก (ใช้ดินทางทรพ)":
+    if selected_mat != "ไม่ใช้วัสดุคัดเลือก (ใช้ดินคันทาง)":
         layers.append({'material': selected_mat, 'thickness_cm': selected_thickness, 'drainage_coeff': selected_m})
     
     # Store inputs
