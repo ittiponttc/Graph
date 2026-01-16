@@ -237,7 +237,7 @@ def calculate_layer_thicknesses(W18: float, Zr: float, So: float, delta_psi: flo
     }
     
     # Get active layers (exclude "ไม่ใช้วัสดุ")
-    active_layers = [l for l in layers if l['material'] != "ไม่ใช้วัสดุคัดเลือก (ใช้ดินทางทรพ)"]
+    active_layers = [l for l in layers if l['material'] != "ไม่ใช้วัสดุคัดเลือก (ใช้ดินคันทาง)"]
     
     if not active_layers:
         return results
