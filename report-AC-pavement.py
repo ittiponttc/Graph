@@ -778,7 +778,9 @@ def main():
             format="%d",
             help="จำนวน 18-kip ESAL ตลอดอายุการใช้งาน"
         )
-        
+                # แสดงค่า ESAL เป็นล้าน (ภาษาไทย)
+        esal_million = W18 / 1000000
+        st.caption(f"💡 W₁₈ = **{esal_million:,.2f} ล้าน** ESALs")
         reliability = st.selectbox(
             "Reliability Level (R)",
             options=list(RELIABILITY_ZR.keys()),
