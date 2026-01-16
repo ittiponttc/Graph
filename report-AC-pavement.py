@@ -539,10 +539,10 @@ def create_word_report(project_title: str, inputs: dict, calc_results: dict,
     # ========================================
     doc.add_heading('3. คุณสมบัติวัสดุชั้นทาง', level=2)
     
-    mat_table = doc.add_table(rows=1, cols=5)
+    mat_table = doc.add_table(rows=1, cols=6)
     mat_table.style = 'Table Grid'
     
-    mat_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'mᵢ', 'Mᵣ (psi)']
+    mat_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'mᵢ', 'Mᵣ (psi)', 'Mᵣ (MPa)']
     for i, header in enumerate(mat_headers):
         cell = mat_table.rows[0].cells[i]
         cell.text = header
@@ -557,6 +557,8 @@ def create_word_report(project_title: str, inputs: dict, calc_results: dict,
         row.cells[2].text = f'{layer["a_i"]:.2f}'
         row.cells[3].text = f'{layer["m_i"]:.2f}'
         row.cells[4].text = f'{layer["mr_psi"]:,}'
+        mr_mpa = layer["mr_psi"] * 0.006895  # แปลง psi เป็น MPa
+        row.cells[5].text = f'{mr_mpa:,.0f}'
     
     # ========================================
     # SECTION 4: Step-by-Step Calculation
@@ -776,11 +778,13 @@ def main():
             value=5000000,
             step=100000,
             format="%d",
-            help="จำนวน 18-kip ESAL ตลอดอายุการใช้งาน"
+            help="จำนวน 18-kip ESAL ตลอดอายุการใช้งาน (สูงสุด 250 ล้าน)"
         )
-                # แสดงค่า ESAL เป็นล้าน (ภาษาไทย)
+        
+        # แสดงค่า ESAL เป็นล้าน (ภาษาไทย)
         esal_million = W18 / 1000000
         st.caption(f"💡 W₁₈ = **{esal_million:,.2f} ล้าน** ESALs")
+        
         reliability = st.selectbox(
             "Reliability Level (R)",
             options=list(RELIABILITY_ZR.keys()),
