@@ -358,13 +358,25 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
     Layout: ความหนา (ซ้าย) | ชั้นวัสดุ | ชนิดวัสดุ (ขวา)
     """
     
+    # Set Thai font
+    import matplotlib.font_manager as fm
+    thai_font_path = '/usr/share/fonts/truetype/tlwg/Garuda.ttf'
+    try:
+        thai_font = fm.FontProperties(fname=thai_font_path)
+    except:
+        # Fallback: try other Thai fonts
+        try:
+            thai_font = fm.FontProperties(family='TH Sarabun New')
+        except:
+            thai_font = fm.FontProperties()
+    
     if not layers_result:
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.text(0.5, 0.5, 'No layers defined', ha='center', va='center', fontsize=14)
         ax.axis('off')
         return fig
     
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(14, 10))
     
     total_thickness = sum([l['design_thickness_cm'] for l in layers_result])
     subgrade_thickness = max(15, total_thickness * 0.20)
@@ -406,12 +418,14 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
             bbox=dict(boxstyle='round,pad=0.4', facecolor='lightyellow', edgecolor='orange', linewidth=1.5)
         )
         
-        # RIGHT SIDE: Material short name (ชื่อย่อวัสดุ - English)
+        # RIGHT SIDE: Material name in Thai (ชื่อวัสดุภาษาไทย)
+        material_name = layer['material']
         ax.annotate(
-            short_name,
+            material_name,
             xy=(x_center + layer_width/2 + 0.1, current_y - thickness_cm/2),
             xytext=(x_center + layer_width/2 + 1.8, current_y - thickness_cm/2),
-            fontsize=12, fontweight='bold',
+            fontsize=11, fontweight='bold',
+            fontproperties=thai_font,
             arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
             va='center', ha='left',
             bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcyan', edgecolor='steelblue', linewidth=1.5)
@@ -428,24 +442,26 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
     )
     ax.add_patch(subgrade_rect)
     
-    # Subgrade label (right side only)
+    # Subgrade label (right side only) - Thai
     ax.annotate(
-        'Subgrade',
+        'ดินเดิม (Subgrade)',
         xy=(x_center + layer_width/2 + 0.1, current_y - subgrade_thickness/2),
         xytext=(x_center + layer_width/2 + 1.8, current_y - subgrade_thickness/2),
-        fontsize=12, fontweight='bold',
+        fontsize=11, fontweight='bold',
+        fontproperties=thai_font,
         arrowprops=dict(arrowstyle='->', color='black', lw=1.5),
         va='center', ha='left',
         bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcyan', edgecolor='steelblue', linewidth=1.5)
     )
     
-    # Title
+    # Title - Thai
     ax.text(x_center, total_thickness + subgrade_thickness + 3,
-            'Pavement Cross Section',
+            'ภาพตัดขวางโครงสร้างชั้นทาง',
             ha='center', va='center',
-            fontsize=16, fontweight='bold')
+            fontsize=18, fontweight='bold',
+            fontproperties=thai_font)
     
-    ax.set_xlim(-4, 18)
+    ax.set_xlim(-4, 22)
     ax.set_ylim(-5, total_thickness + subgrade_thickness + 5)
     ax.set_aspect('equal')
     ax.axis('off')
