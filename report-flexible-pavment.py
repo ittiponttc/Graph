@@ -215,6 +215,33 @@ def calculate_sn_for_layer(W18: float, Zr: float, So: float,
         return None
 
 
+def calculate_w18_supported(SN: float, Zr: float, So: float, 
+                            delta_psi: float, Mr: float) -> float:
+    """
+    Calculate W18 that can be supported by a given SN
+    
+    คำนวณค่า W₁₈ ที่โครงสร้างรองรับได้จากค่า SN ที่ออกแบบ
+    
+    สูตร: log₁₀(W₁₈) = Zr×So + 9.36×log₁₀(SN+1) - 0.20 
+                       + log₁₀(ΔPSI/(4.2-1.5)) / (0.4 + 1094/(SN+1)^5.19)
+                       + 2.32×log₁₀(Mr) - 8.07
+    """
+    term1 = Zr * So
+    term2 = 9.36 * np.log10(SN + 1) - 0.20
+    
+    numerator = np.log10(delta_psi / (4.2 - 1.5))
+    denominator = 0.4 + (1094 / ((SN + 1) ** 5.19))
+    term3 = numerator / denominator
+    
+    term4 = 2.32 * np.log10(Mr) - 8.07
+    
+    log_W18 = term1 + term2 + term3 + term4
+    
+    W18_supported = 10 ** log_W18
+    
+    return W18_supported
+
+
 def calculate_layer_thicknesses(W18: float, Zr: float, So: float, delta_psi: float,
                                  subgrade_mr: float, layers: list) -> dict:
     """
@@ -1091,6 +1118,39 @@ def main():
             st.success("**PASS** ✅")
         else:
             st.error("**FAIL** ❌")
+    
+    # W18 Supported calculation
+    w18_supported = calculate_w18_supported(
+        calc_results['total_sn_provided'], Zr, So, delta_psi, Mr
+    )
+    w18_supported_million = w18_supported / 1_000_000
+    w18_diff_percent = ((w18_supported - W18) / W18) * 100
+    
+    st.markdown("---")
+    
+    w18_col1, w18_col2 = st.columns(2)
+    
+    with w18_col1:
+        st.metric(
+            "W₁₈ ออกแบบ",
+            f"{W18/1_000_000:,.2f} ล้าน"
+        )
+    
+    with w18_col2:
+        delta_str = f"{w18_diff_percent:+.1f}%"
+        if w18_diff_percent >= 0:
+            st.metric(
+                "W₁₈ รองรับได้",
+                f"{w18_supported_million:,.2f} ล้าน",
+                delta=delta_str
+            )
+        else:
+            st.metric(
+                "W₁₈ รองรับได้",
+                f"{w18_supported_million:,.2f} ล้าน",
+                delta=delta_str,
+                delta_color="inverse"
+            )
     
     # Status message
     if design_check['passed']:
