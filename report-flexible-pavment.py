@@ -49,7 +49,7 @@ MATERIALS = {
         "mr_psi": 362500,
         "mr_mpa": 2500,
         "layer_type": "surface",
-        "color": "#2C3E50",
+        "color": "#1C1C1C",  # สีดำ (Black)
         "short_name": "AC"
     },
     "ผิวทางลาดยาง PMA": {
@@ -58,7 +58,7 @@ MATERIALS = {
         "mr_psi": 536500,
         "mr_mpa": 3700,
         "layer_type": "surface",
-        "color": "#1A252F",
+        "color": "#2C2C2C",  # สีดำเข้ม (Dark Black)
         "short_name": "PMA"
     },
     
@@ -69,7 +69,7 @@ MATERIALS = {
         "mr_psi": 174000,
         "mr_mpa": 1200,
         "layer_type": "base",
-        "color": "#78909C",
+        "color": "#78909C",  # สีเทา (Gray)
         "short_name": "CTB"
     },
     "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc.": {
@@ -78,7 +78,7 @@ MATERIALS = {
         "mr_psi": 123250,
         "mr_mpa": 850,
         "layer_type": "base",
-        "color": "#607D8B",
+        "color": "#607D8B",  # สีเทาเข้ม
         "short_name": "SCAB"
     },
     "พื้นทางหินคลุก CBR 80%": {
@@ -87,7 +87,7 @@ MATERIALS = {
         "mr_psi": 50750,
         "mr_mpa": 350,
         "layer_type": "base",
-        "color": "#795548",
+        "color": "#795548",  # สีน้ำตาล
         "short_name": "CAB"
     },
     "พื้นทางดินซีเมนต์ UCS 17.5 ksc.": {
@@ -96,7 +96,7 @@ MATERIALS = {
         "mr_psi": 50750,
         "mr_mpa": 350,
         "layer_type": "base",
-        "color": "#8D6E63",
+        "color": "#8D6E63",  # สีน้ำตาลอ่อน
         "short_name": "SCB"
     },
     "พื้นทางวัสดุหมุนเวียน (Recycling)": {
@@ -105,29 +105,29 @@ MATERIALS = {
         "mr_psi": 123250,
         "mr_mpa": 850,
         "layer_type": "base",
-        "color": "#5D4037",
+        "color": "#5D4037",  # สีน้ำตาลเข้ม
         "short_name": "RAP"
     },
     
-    # ============ ชั้นรองพื้นทาง (Subbase) ============
+    # ============ ชั้นรองพื้นทาง (Subbase) - วัสดุมวลรวม ============
     "รองพื้นทางวัสดุมวลรวม CBR 25%": {
         "layer_coeff": 0.10,
         "drainage_coeff": 1.0,
         "mr_psi": 21750,
         "mr_mpa": 150,
         "layer_type": "subbase",
-        "color": "#A1887F",
+        "color": "#FFB74D",  # สีส้มอ่อน (Light Orange) - วัสดุมวลรวม
         "short_name": "GSB"
     },
     
-    # ============ วัสดุคัดเลือก (Selected Material) ============
+    # ============ วัสดุคัดเลือก (Selected Material) - ทราย ============
     "วัสดุคัดเลือก ก": {
         "layer_coeff": 0.08,
         "drainage_coeff": 1.0,
         "mr_psi": 14504,
         "mr_mpa": 100,
         "layer_type": "selected",
-        "color": "#BCAAA4",
+        "color": "#FFF176",  # สีเหลือง (Yellow) - ทราย
         "short_name": "SM-A"
     },
     
@@ -404,8 +404,9 @@ def plot_pavement_section(layers_result: list, subgrade_mr: float = None) -> plt
         )
         ax.add_patch(rect)
         
-        # Text color based on background
-        text_color = 'white' if color in ['#2C3E50', '#1A252F', '#78909C', '#607D8B', '#795548', '#8D6E63', '#5D4037', '#6D4C41'] else 'black'
+        # Text color based on background (สีเข้มใช้ตัวอักษรสีขาว)
+        dark_colors = ['#1C1C1C', '#2C2C2C', '#78909C', '#607D8B', '#795548', '#8D6E63', '#5D4037', '#6D4C41']
+        text_color = 'white' if color in dark_colors else 'black'
         
         # LEFT SIDE: Thickness (ความหนา)
         ax.annotate(
@@ -659,10 +660,11 @@ def create_word_report(project_title: str, inputs: dict, calc_results: dict,
     # ========================================
     doc.add_heading('5. ตารางสรุปการคำนวณ Structural Number', level=2)
     
-    sn_table = doc.add_table(rows=1, cols=7)
+    sn_table = doc.add_table(rows=1, cols=8)
     sn_table.style = 'Table Grid'
     
-    sn_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'Dᵢ (นิ้ว)', 'mᵢ', 'ΔSNᵢ', 'ΣSN']
+    # จัดเรียงใหม่: ชั้น, วัสดุ, aᵢ, mᵢ, Dᵢ (นิ้ว), Dᵢ (ซม.), ΔSNᵢ, ΣSN
+    sn_headers = ['ชั้น', 'วัสดุ', 'aᵢ', 'mᵢ', 'Dᵢ (นิ้ว)', 'Dᵢ (ซม.)', 'ΔSNᵢ', 'ΣSN']
     for i, header in enumerate(sn_headers):
         cell = sn_table.rows[0].cells[i]
         cell.text = header
@@ -675,10 +677,11 @@ def create_word_report(project_title: str, inputs: dict, calc_results: dict,
         row.cells[0].text = str(layer['layer_no'])
         row.cells[1].text = layer['material']
         row.cells[2].text = f'{layer["a_i"]:.2f}'
-        row.cells[3].text = f'{layer["design_thickness_inch"]:.2f}'
-        row.cells[4].text = f'{layer["m_i"]:.2f}'
-        row.cells[5].text = f'{layer["sn_contribution"]:.3f}'
-        row.cells[6].text = f'{layer["cumulative_sn"]:.2f}'
+        row.cells[3].text = f'{layer["m_i"]:.2f}'
+        row.cells[4].text = f'{layer["design_thickness_inch"]:.2f}'
+        row.cells[5].text = f'{layer["design_thickness_cm"]:.0f}'
+        row.cells[6].text = f'{layer["sn_contribution"]:.3f}'
+        row.cells[7].text = f'{layer["cumulative_sn"]:.2f}'
     
     # Formula
     doc.add_paragraph()
