@@ -291,7 +291,7 @@ def main():
                 stop_y_esb = st.slider(
                     "Subbase Elastic Modulus (ESB) psi", 
                     0, height, int(height * 0.10),
-                    help="100,000 psi ใช้เลข 114"
+                    help="100,000 psi ใช้เลข 107"
                 )
                 
                 # Y position bottom (where red meets dark blue)
