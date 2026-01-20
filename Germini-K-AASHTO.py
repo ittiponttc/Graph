@@ -46,12 +46,12 @@ def main():
         st.sidebar.header("2. กำหนดเส้นทางการอ่านค่า")
         
         # จุดเริ่มต้น แกน X (MR)
-        start_x = st.sidebar.slider("จุดเริ่มต้น แกน X (MR)", 0, width, int(width * 0.25))
+        start_x = st.sidebar.slider("Subbase Thickness (MR)", 0, width, int(width * 0.25))
         # จุดเริ่มแกน Y (ขอบล่าง)
-        start_y_bottom = st.sidebar.slider("จุดเริ่มแกน Y (ขอบล่าง)", 0, height, int(height * 0.85))
+        start_y_bottom = st.sidebar.slider("Subbase Elastic Modulus (psi)", 0, height, int(height * 0.85))
         
         # ความสูงจุดตัดที่ 1 (DSB) - นี่คือค่า Y ที่จะกำหนดตำแหน่งจุดสีดำ
-        stop_y_1 = st.sidebar.slider("ความสูงจุดตัดที่ 1 (DSB)", 0, height, int(height * 0.3))
+        stop_y_1 = st.sidebar.slider("Road base soil Resilient (psi)", 0, height, int(height * 0.3))
         
         # จุดสิ้นสุด แกน X (k) สำหรับเส้นเหลืองแนวตั้ง
         end_x = st.sidebar.slider("จุดสิ้นสุด แกน X (k)", 0, width, int(width * 0.75))
@@ -89,11 +89,11 @@ def main():
 
         # --- 3.4 วาดจุดและลูกศร ---
         # วาดจุดสีดำตรงจุดตัดที่คำนวณได้
-        radius = 10
+        radius = 5
         draw.ellipse([
             (constrained_x - radius, stop_y_1 - radius), 
             (constrained_x + radius, stop_y_1 + radius)
-        ], fill="black", outline="purple", width=3)
+        ], fill="black", outline="red", width=3)
 
         # (Optional) วาดหัวลูกศรสีแดงที่จุดเริ่มต้น
         arrow_size = 15
