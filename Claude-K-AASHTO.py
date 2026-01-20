@@ -285,7 +285,7 @@ def main():
                 start_x = st.slider(
                     "Subbase Thickness, D_sb (inch)", 
                     0, width, int(width * 0.15),
-                    help="12"ใช้เลข249, 13"-269,14"-207,15"-228,16"-169,18"-128"
+                    help="12"ใช้เลข249, 13inch-269,14inch-207,15-228,16-169,18 inch-128"
                 )
                 # Y position top (orange and blue top)
                 stop_y_esb = st.slider(
