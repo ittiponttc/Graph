@@ -3,20 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import os
 import math
-import base64
 from datetime import datetime
-
-# ============================================
-# Default Nomograph Image (AASHTO Figure 3.3)
-# ============================================
-
-def get_default_image():
-    """Return default AASHTO nomograph image."""
-    # Base64 encoded default image will be loaded from file or embedded
-    default_image_path = os.path.join(os.path.dirname(__file__), "default_nomograph.jpg")
-    if os.path.exists(default_image_path):
-        return Image.open(default_image_path).convert("RGB")
-    return None
 
 # ============================================
 # Helper Functions for Calibration
@@ -249,46 +236,35 @@ def main():
     
     # Tab 1: Main Calculator
     with tab1:
-        # File uploader (optional - has default image)
+        # File uploader
         uploaded_file = st.file_uploader(
-            "📁 อัปโหลดภาพ Nomograph (ไม่บังคับ - มีภาพ Default)",
+            "📁 อัปโหลดภาพ Nomograph (Figure 3.3 AASHTO 1993)",
             type=['png', 'jpg', 'jpeg'],
-            help="รองรับไฟล์ PNG, JPG, JPEG หรือใช้ภาพ Default"
+            help="รองรับไฟล์ PNG, JPG, JPEG"
         )
         
-        # Use uploaded file or default image
         if uploaded_file is not None:
             image = Image.open(uploaded_file).convert("RGB")
-            st.success("✅ ใช้ภาพที่อัปโหลด")
-        else:
-            default_img = get_default_image()
-            if default_img is not None:
-                image = default_img
-                st.info("📊 ใช้ภาพ Default: AASHTO Figure 3.3")
-            else:
-                st.warning("⚠️ ไม่พบภาพ Default กรุณาอัปโหลดภาพ Nomograph")
-                st.stop()
-        
-        width, height = image.size
-        img_draw = image.copy()
-        draw = ImageDraw.Draw(img_draw)
-        
-        # Layout: sidebar for controls, main area for image
-        st.sidebar.header("🎯 ตั้งค่าเส้นบนกราฟ")
-        
-        # =========================================
-        # Section 1: Turning Line (Green)
-        # =========================================
-        with st.sidebar.expander("1️⃣ เส้น Turning Line (สีเขียว)", expanded=True):
-            st.caption("ปรับให้ทับกับเส้น Turning Line บนกราฟ")
+            width, height = image.size
+            img_draw = image.copy()
+            draw = ImageDraw.Draw(img_draw)
             
-            col1, col2 = st.columns(2)
-            with col1:
-                green_x1 = st.slider("X เริ่มต้น", 0, width, min(421, width-1), key="gx1")
-                green_y1 = st.slider("Y เริ่มต้น", 0, height, min(346, height-1), key="gy1")
-            with col2:
-                green_x2 = st.slider("X สิ้นสุด", 0, width, min(691, width-1), key="gx2")
-                green_y2 = st.slider("Y สิ้นสุด", 0, height, min(620, height-1), key="gy2")
+            # Layout: sidebar for controls, main area for image
+            st.sidebar.header("🎯 ตั้งค่าเส้นบนกราฟ")
+            
+            # =========================================
+            # Section 1: Turning Line (Green)
+            # =========================================
+            with st.sidebar.expander("1️⃣ เส้น Turning Line (สีเขียว)", expanded=True):
+                st.caption("ปรับให้ทับกับเส้น Turning Line บนกราฟ")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    green_x1 = st.slider("X เริ่มต้น", 0, width, min(421, width-1), key="gx1")
+                    green_y1 = st.slider("Y เริ่มต้น", 0, height, min(346, height-1), key="gy1")
+                with col2:
+                    green_x2 = st.slider("X สิ้นสุด", 0, width, min(691, width-1), key="gx2")
+                    green_y2 = st.slider("Y สิ้นสุด", 0, height, min(620, height-1), key="gy2")
             
             # Draw green turning line
             draw.line([(green_x1, green_y1), (green_x2, green_y2)], fill="green", width=6)
@@ -512,6 +488,21 @@ def main():
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             )
                             st.success("✅ สร้างรายงานสำเร็จ!")
+        
+        else:
+            # Show placeholder when no image uploaded
+            st.info("👆 กรุณาอัปโหลดภาพ Nomograph เพื่อเริ่มต้นใช้งาน")
+            
+            # Show example
+            with st.expander("📖 ตัวอย่างการใช้งาน"):
+                st.markdown("""
+                1. อัปโหลดภาพ **Figure 3.3** จากหนังสือ AASHTO 1993
+                2. ปรับ **เส้นสีเขียว** ให้ทับกับ Turning Line
+                3. ปรับ **เส้นสีแดง/ส้ม** ตามค่า MR และ ESB ที่ต้องการ
+                4. ปรับ **จุดตัด** ให้ตรงกับเส้นโค้ง DSB
+                5. อ่านค่า **k∞** จากตำแหน่งเส้นสีน้ำเงินตัดแกนขวา
+                6. กรอกค่าและดาวน์โหลดรายงาน
+                """)
 
 if __name__ == "__main__":
     main()
