@@ -298,7 +298,7 @@ def main():
                 stop_y_1 = st.slider(
                     "Roadbed Soil Resilient Modulus (MR) psi", 
                     0, height, int(height * 0.55),
-                    help="ความสูงของเส้นแนวนอนด้านล่าง (จุดตัด Turning Line)"
+                    help=" 6,000 psi ใช้เลข 455"
                 )
             
             # =========================================
