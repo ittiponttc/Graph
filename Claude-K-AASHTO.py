@@ -285,13 +285,13 @@ def main():
                 start_x = st.slider(
                     "Subbase Thickness, D_sb (inch)", 
                     0, width, int(width * 0.15),
-                    help="ตำแหน่งแนวตั้งด้านซ้าย (แกน MR)"
+                    help="12"ใช้เลข249, 13"-269,14"-207,15"-228,16"-169,18"-128"
                 )
                 # Y position top (orange and blue top)
                 stop_y_esb = st.slider(
                     "Subbase Elastic Modulus (ESB) psi", 
                     0, height, int(height * 0.10),
-                    help="ความสูงของเส้นแนวนอนด้านบน"
+                    help="100,000 psi ใช้เลข 114"
                 )
                 
                 # Y position bottom (where red meets dark blue)
