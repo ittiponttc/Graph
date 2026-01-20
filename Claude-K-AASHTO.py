@@ -223,10 +223,10 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("🟢 **เส้นสีเขียว** - Turning Line (เส้นอ้างอิง)")
-            st.markdown("🔴 **เส้นสีแดง** - เส้นจาก MR ขึ้นไปหาจุดตัด ESB")
+            st.markdown("🔴 **เส้นสีแดง** - เส้นแนวตั้งจากแกน MR/ESB")
         with col2:
-            st.markdown("🔵 **เส้นสีน้ำเงิน** - เส้นแนวนอนจาก ESB ไปทางขวา")
-            st.markdown("🟠 **เส้นสีส้ม** - เส้นลงจาก Turning Line สู่แกน k∞")
+            st.markdown("🟡 **เส้นสีเหลือง** - เส้นแนวนอนไป Turning Line")
+            st.markdown("🟠 **เส้นสีส้ม** - เส้นแนวตั้งลงสู่แกน k∞")
         
         st.subheader("Reference")
         st.markdown("""
@@ -278,33 +278,26 @@ def main():
             # =========================================
             # Section 2: Input Parameters
             # =========================================
-            with st.sidebar.expander("2️⃣ ค่าพารามิเตอร์ (เส้นแดง/น้ำเงิน)", expanded=True):
+            with st.sidebar.expander("2️⃣ ค่าพารามิเตอร์ (เส้นแดง/เหลือง)", expanded=True):
                 st.caption("กำหนดตำแหน่งจุดเริ่มต้นและจุดตัด")
                 
-                # Starting point (MR axis)
+                # Starting point (MR axis) - top of red line
                 start_x = st.slider(
                     "ตำแหน่ง MR (แนวนอน)", 
-                    0, width, int(width * 0.25),
+                    0, width, int(width * 0.15),
                     help="ตำแหน่งบนแกน Roadbed Soil Resilient Modulus"
                 )
-                start_y_bottom = st.slider(
-                    "จุดเริ่มต้น (แนวตั้ง)", 
-                    0, height, int(height * 0.85),
-                    help="จุดเริ่มต้นที่ขอบล่างของกราฟ"
-                )
-                
-                # Intersection point with ESB curve (for blue line)
                 stop_y_esb = st.slider(
-                    "จุดตัดเส้นโค้ง ESB (แนวตั้ง)", 
-                    0, height, int(height * 0.15),
-                    help="ความสูงของจุดตัดกับเส้นโค้ง Subbase Elastic Modulus"
+                    "จุดเริ่มต้นเส้นแดง (แนวตั้ง)", 
+                    0, height, int(height * 0.10),
+                    help="จุดเริ่มต้นของเส้นสีแดง (บนสุด)"
                 )
                 
-                # Intersection point (ESB/DSB curves)
+                # Intersection point - where red meets yellow
                 stop_y_1 = st.slider(
-                    "จุดตัดเส้นโค้ง DSB (แนวตั้ง)", 
-                    0, height, int(height * 0.35),
-                    help="ความสูงของจุดตัดกับเส้นโค้ง Subbase Thickness"
+                    "จุดตัดเส้นแดง-เหลือง (แนวตั้ง)", 
+                    0, height, int(height * 0.55),
+                    help="ความสูงของจุดที่เส้นแดงตัดกับเส้นเหลือง"
                 )
             
             # =========================================
@@ -330,49 +323,36 @@ def main():
             line_width = 4
             arrow_size = 12
             
-            # Red line: vertical from MR axis up to ESB intersection
-            draw.line([(start_x, start_y_bottom), (start_x, stop_y_esb)], fill="red", width=line_width)
+            # Red line: vertical from MR axis down to yellow line intersection
+            draw.line([(start_x, stop_y_esb), (start_x, stop_y_1)], fill="red", width=line_width)
             
-            # Blue line: horizontal from ESB intersection to k∞ axis (always horizontal)
-            draw.line([(start_x, stop_y_esb), (constrained_x, stop_y_esb)], fill="blue", width=line_width)
-            
-            # Arrow for blue line
+            # Arrow for red line (pointing down)
             draw.polygon([
-                (constrained_x, stop_y_esb),
-                (constrained_x - arrow_size, stop_y_esb - arrow_size//2),
-                (constrained_x - arrow_size, stop_y_esb + arrow_size//2)
-            ], fill="blue")
+                (start_x, stop_y_1),
+                (start_x - arrow_size//2, stop_y_1 - arrow_size),
+                (start_x + arrow_size//2, stop_y_1 - arrow_size)
+            ], fill="red")
             
-            # Orange line: vertical down from blue line end to turning line intersection
-            draw.line([(constrained_x, stop_y_esb), (constrained_x, stop_y_1)], fill="orange", width=line_width)
+            # Yellow line 1: horizontal from red line to turning line (at stop_y_1 level)
+            draw.line([(start_x, stop_y_1), (constrained_x, stop_y_1)], fill="yellow", width=line_width+2)
+            draw.line([(start_x, stop_y_1), (constrained_x, stop_y_1)], fill="orange", width=line_width)
             
-            # Orange line: horizontal from turning line to DSB reading point
-            # (This shows the DSB value on the diagonal scale)
-            draw.line([(constrained_x, stop_y_1), (constrained_x + 50, stop_y_1)], fill="orange", width=line_width)
-            
-            # Orange line: vertical down to k∞ axis
-            draw.line([(constrained_x, stop_y_1), (constrained_x, k_axis_y)], fill="orange", width=line_width)
-            
-            # Draw intersection point
+            # Draw black dot at turning line intersection
             radius = 8
             draw.ellipse([
                 (constrained_x - radius, stop_y_1 - radius),
                 (constrained_x + radius, stop_y_1 + radius)
             ], fill="black", outline="white", width=2)
             
-            # Draw arrows
-            # Arrow at start (MR)
-            draw.polygon([
-                (start_x, start_y_bottom),
-                (start_x - arrow_size//2, start_y_bottom - arrow_size),
-                (start_x + arrow_size//2, start_y_bottom - arrow_size)
-            ], fill="red")
+            # Yellow line 2: vertical down from turning line intersection to k∞ axis
+            draw.line([(constrained_x, stop_y_1), (constrained_x, k_axis_y)], fill="yellow", width=line_width+2)
+            draw.line([(constrained_x, stop_y_1), (constrained_x, k_axis_y)], fill="orange", width=line_width)
             
-            # Arrow at end (k∞)
+            # Arrow for yellow line 2 (pointing down)
             draw.polygon([
                 (constrained_x, k_axis_y),
-                (constrained_x - arrow_size//2, k_axis_y + arrow_size),
-                (constrained_x + arrow_size//2, k_axis_y + arrow_size)
+                (constrained_x - arrow_size//2, k_axis_y - arrow_size),
+                (constrained_x + arrow_size//2, k_axis_y - arrow_size)
             ], fill="orange")
             
             # =========================================
