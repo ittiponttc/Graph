@@ -223,10 +223,10 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("🟢 **เส้นสีเขียว** - Turning Line (เส้นอ้างอิง)")
-            st.markdown("🔴 **เส้นสีแดง** - เส้นจาก MR ไปหาจุดตัด ESB/DSB")
+            st.markdown("🔴 **เส้นสีแดง** - เส้นจาก MR ขึ้นไปหาจุดตัด ESB")
         with col2:
+            st.markdown("🔵 **เส้นสีน้ำเงิน** - เส้นจาก ESB ไปหาจุดตัด DSB")
             st.markdown("🟠 **เส้นสีส้ม** - เส้นไปหา Turning Line และลงสู่แกน k∞")
-            st.markdown("⚫ **จุดสีดำ** - จุดตัดบน Turning Line")
         
         st.subheader("Reference")
         st.markdown("""
@@ -260,11 +260,11 @@ def main():
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    green_x1 = st.slider("X เริ่มต้น", 0, width, int(width * 0.45), key="gx1")
-                    green_y1 = st.slider("Y เริ่มต้น", 0, height, int(height * 0.15), key="gy1")
+                    green_x1 = st.slider("X เริ่มต้น", 0, width, 421, key="gx1")
+                    green_y1 = st.slider("Y เริ่มต้น", 0, height, 346, key="gy1")
                 with col2:
-                    green_x2 = st.slider("X สิ้นสุด", 0, width, int(width * 0.85), key="gx2")
-                    green_y2 = st.slider("Y สิ้นสุด", 0, height, int(height * 0.95), key="gy2")
+                    green_x2 = st.slider("X สิ้นสุด", 0, width, 691, key="gx2")
+                    green_y2 = st.slider("Y สิ้นสุด", 0, height, 620, key="gy2")
             
             # Draw green turning line
             draw.line([(green_x1, green_y1), (green_x2, green_y2)], fill="green", width=6)
@@ -278,7 +278,7 @@ def main():
             # =========================================
             # Section 2: Input Parameters
             # =========================================
-            with st.sidebar.expander("2️⃣ ค่าพารามิเตอร์ (เส้นแดง)", expanded=True):
+            with st.sidebar.expander("2️⃣ ค่าพารามิเตอร์ (เส้นแดง/น้ำเงิน)", expanded=True):
                 st.caption("กำหนดตำแหน่งจุดเริ่มต้นและจุดตัด")
                 
                 # Starting point (MR axis)
@@ -291,6 +291,13 @@ def main():
                     "จุดเริ่มต้น (แนวตั้ง)", 
                     0, height, int(height * 0.85),
                     help="จุดเริ่มต้นที่ขอบล่างของกราฟ"
+                )
+                
+                # Intersection point with ESB curve (for blue line)
+                stop_y_esb = st.slider(
+                    "จุดตัดเส้นโค้ง ESB (แนวตั้ง)", 
+                    0, height, int(height * 0.15),
+                    help="ความสูงของจุดตัดกับเส้นโค้ง Subbase Elastic Modulus"
                 )
                 
                 # Intersection point (ESB/DSB curves)
@@ -321,12 +328,25 @@ def main():
             # Draw Lines
             # =========================================
             line_width = 4
+            arrow_size = 12
             
-            # Red line: vertical from MR axis
-            draw.line([(start_x, start_y_bottom), (start_x, stop_y_1)], fill="red", width=line_width)
+            # Red line: vertical from MR axis up to ESB intersection
+            draw.line([(start_x, start_y_bottom), (start_x, stop_y_esb)], fill="red", width=line_width)
             
-            # Orange line: horizontal to turning line
-            draw.line([(start_x, stop_y_1), (constrained_x, stop_y_1)], fill="orange", width=line_width)
+            # Blue line: horizontal from ESB intersection to DSB curve (same starting point as red line top)
+            # Calculate the x position where blue line meets DSB curve at stop_y_1
+            blue_end_x = start_x + int((stop_y_1 - stop_y_esb) * 1.5)  # Approximate, user can adjust via stop_y_1
+            draw.line([(start_x, stop_y_esb), (blue_end_x, stop_y_1)], fill="blue", width=line_width)
+            
+            # Arrow for blue line
+            draw.polygon([
+                (blue_end_x, stop_y_1),
+                (blue_end_x - arrow_size, stop_y_1 - arrow_size//2),
+                (blue_end_x - arrow_size, stop_y_1 + arrow_size//2)
+            ], fill="blue")
+            
+            # Orange line: horizontal from DSB intersection to turning line
+            draw.line([(blue_end_x, stop_y_1), (constrained_x, stop_y_1)], fill="orange", width=line_width)
             
             # Orange line: vertical down to k∞ axis
             draw.line([(constrained_x, stop_y_1), (constrained_x, k_axis_y)], fill="orange", width=line_width)
@@ -339,7 +359,6 @@ def main():
             ], fill="black", outline="white", width=2)
             
             # Draw arrows
-            arrow_size = 12
             # Arrow at start (MR)
             draw.polygon([
                 (start_x, start_y_bottom),
