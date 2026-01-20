@@ -376,11 +376,11 @@ def main():
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                st.metric("จุดเริ่มต้น (MR)", f"({start_x}, {start_y_bottom})")
+                st.metric("มุมซ้ายบน", f"({start_x}, {stop_y_esb})")
             with col2:
-                st.metric("จุดตัด Turning Line", f"({constrained_x}, {stop_y_1})")
+                st.metric("มุมซ้ายล่าง (Turning Line)", f"({constrained_x}, {stop_y_1})")
             with col3:
-                st.metric("จุดอ่านค่า k∞", f"({constrained_x}, {k_axis_y})")
+                st.metric("มุมขวาบน (k∞)", f"({constrained_x}, {stop_y_esb})")
             
             st.info(f"📍 พิกัดจุดตัดบน Turning Line: **({constrained_x}, {stop_y_1})**")
             
