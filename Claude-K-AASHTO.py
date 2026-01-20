@@ -225,8 +225,8 @@ def main():
             st.markdown("🟢 **เส้นสีเขียว** - Turning Line (เส้นอ้างอิง)")
             st.markdown("🔴 **เส้นสีแดง** - เส้นจาก MR ขึ้นไปหาจุดตัด ESB")
         with col2:
-            st.markdown("🔵 **เส้นสีน้ำเงิน** - เส้นจาก ESB ไปหาจุดตัด DSB")
-            st.markdown("🟠 **เส้นสีส้ม** - เส้นไปหา Turning Line และลงสู่แกน k∞")
+            st.markdown("🔵 **เส้นสีน้ำเงิน** - เส้นแนวนอนจาก ESB ไปทางขวา")
+            st.markdown("🟠 **เส้นสีส้ม** - เส้นลงจาก Turning Line สู่แกน k∞")
         
         st.subheader("Reference")
         st.markdown("""
@@ -333,20 +333,22 @@ def main():
             # Red line: vertical from MR axis up to ESB intersection
             draw.line([(start_x, start_y_bottom), (start_x, stop_y_esb)], fill="red", width=line_width)
             
-            # Blue line: horizontal from ESB intersection to DSB curve (same starting point as red line top)
-            # Calculate the x position where blue line meets DSB curve at stop_y_1
-            blue_end_x = start_x + int((stop_y_1 - stop_y_esb) * 1.5)  # Approximate, user can adjust via stop_y_1
-            draw.line([(start_x, stop_y_esb), (blue_end_x, stop_y_1)], fill="blue", width=line_width)
+            # Blue line: horizontal from ESB intersection to k∞ axis (always horizontal)
+            draw.line([(start_x, stop_y_esb), (constrained_x, stop_y_esb)], fill="blue", width=line_width)
             
             # Arrow for blue line
             draw.polygon([
-                (blue_end_x, stop_y_1),
-                (blue_end_x - arrow_size, stop_y_1 - arrow_size//2),
-                (blue_end_x - arrow_size, stop_y_1 + arrow_size//2)
+                (constrained_x, stop_y_esb),
+                (constrained_x - arrow_size, stop_y_esb - arrow_size//2),
+                (constrained_x - arrow_size, stop_y_esb + arrow_size//2)
             ], fill="blue")
             
-            # Orange line: horizontal from DSB intersection to turning line
-            draw.line([(blue_end_x, stop_y_1), (constrained_x, stop_y_1)], fill="orange", width=line_width)
+            # Orange line: vertical down from blue line end to turning line intersection
+            draw.line([(constrained_x, stop_y_esb), (constrained_x, stop_y_1)], fill="orange", width=line_width)
+            
+            # Orange line: horizontal from turning line to DSB reading point
+            # (This shows the DSB value on the diagonal scale)
+            draw.line([(constrained_x, stop_y_1), (constrained_x + 50, stop_y_1)], fill="orange", width=line_width)
             
             # Orange line: vertical down to k∞ axis
             draw.line([(constrained_x, stop_y_1), (constrained_x, k_axis_y)], fill="orange", width=line_width)
