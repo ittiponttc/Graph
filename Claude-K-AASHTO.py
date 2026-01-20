@@ -289,7 +289,7 @@ def main():
                 )
                 # Y position top (orange and blue top)
                 stop_y_esb = st.slider(
-                    "ตำแหน่ง Y บน (ESB)", 
+                    "Subbase Elastic Modulus (ESB) psi", 
                     0, height, int(height * 0.10),
                     help="ความสูงของเส้นแนวนอนด้านบน"
                 )
