@@ -283,7 +283,7 @@ def main():
                 
                 # X position (left side of rectangle)
                 start_x = st.slider(
-                    "ตำแหน่ง X (แนวตั้งซ้าย)", 
+                    "Subbase Thickness, D_sb (inch)", 
                     0, width, int(width * 0.15),
                     help="ตำแหน่งแนวตั้งด้านซ้าย (แกน MR)"
                 )
