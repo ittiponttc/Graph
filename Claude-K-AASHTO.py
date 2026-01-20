@@ -296,7 +296,7 @@ def main():
                 
                 # Y position bottom (where red meets dark blue)
                 stop_y_1 = st.slider(
-                    "ตำแหน่ง Y ล่าง (DSB)", 
+                    "Roadbed Soil Resilient Modulus (MR) psi", 
                     0, height, int(height * 0.55),
                     help="ความสูงของเส้นแนวนอนด้านล่าง (จุดตัด Turning Line)"
                 )
