@@ -225,7 +225,7 @@ def main():
             st.markdown("🟢 **เส้นสีเขียว** - Turning Line (เส้นอ้างอิง)")
             st.markdown("🔴 **เส้นสีแดง** - เส้นแนวตั้งจากแกน MR/ESB")
         with col2:
-            st.markdown("🟡 **เส้นสีเหลือง** - เส้นแนวนอนไป Turning Line")
+            st.markdown("🔵 **เส้นสีน้ำเงิน** - เส้นแนวนอนไป Turning Line")
             st.markdown("🟠 **เส้นสีส้ม** - เส้นแนวตั้งลงสู่แกน k∞")
         
         st.subheader("Reference")
@@ -278,7 +278,7 @@ def main():
             # =========================================
             # Section 2: Input Parameters
             # =========================================
-            with st.sidebar.expander("2️⃣ ค่าพารามิเตอร์ (เส้นแดง/เหลือง)", expanded=True):
+            with st.sidebar.expander("2️⃣ ค่าพารามิเตอร์ (เส้นแดง/น้ำเงิน)", expanded=True):
                 st.caption("กำหนดตำแหน่งจุดเริ่มต้นและจุดตัด")
                 
                 # Starting point (MR axis) - top of red line
@@ -293,11 +293,11 @@ def main():
                     help="จุดเริ่มต้นของเส้นสีแดง (บนสุด)"
                 )
                 
-                # Intersection point - where red meets yellow
+                # Intersection point - where red meets blue
                 stop_y_1 = st.slider(
-                    "จุดตัดเส้นแดง-เหลือง (แนวตั้ง)", 
+                    "จุดตัดเส้นแดง-น้ำเงิน (แนวตั้ง)", 
                     0, height, int(height * 0.55),
-                    help="ความสูงของจุดที่เส้นแดงตัดกับเส้นเหลือง"
+                    help="ความสูงของจุดที่เส้นแดงตัดกับเส้นน้ำเงิน"
                 )
             
             # =========================================
@@ -323,7 +323,7 @@ def main():
             line_width = 4
             arrow_size = 12
             
-            # Red line: vertical from MR axis down to yellow line intersection
+            # Red line: vertical from top down to intersection point
             draw.line([(start_x, stop_y_esb), (start_x, stop_y_1)], fill="red", width=line_width)
             
             # Arrow for red line (pointing down)
@@ -333,9 +333,15 @@ def main():
                 (start_x + arrow_size//2, stop_y_1 - arrow_size)
             ], fill="red")
             
-            # Yellow line 1: horizontal from red line to turning line (at stop_y_1 level)
-            draw.line([(start_x, stop_y_1), (constrained_x, stop_y_1)], fill="yellow", width=line_width+2)
-            draw.line([(start_x, stop_y_1), (constrained_x, stop_y_1)], fill="orange", width=line_width)
+            # Blue line: horizontal from red line intersection to turning line
+            draw.line([(start_x, stop_y_1), (constrained_x, stop_y_1)], fill="blue", width=line_width)
+            
+            # Arrow for blue line (pointing right)
+            draw.polygon([
+                (constrained_x, stop_y_1),
+                (constrained_x - arrow_size, stop_y_1 - arrow_size//2),
+                (constrained_x - arrow_size, stop_y_1 + arrow_size//2)
+            ], fill="blue")
             
             # Draw black dot at turning line intersection
             radius = 8
@@ -344,11 +350,10 @@ def main():
                 (constrained_x + radius, stop_y_1 + radius)
             ], fill="black", outline="white", width=2)
             
-            # Yellow line 2: vertical down from turning line intersection to k∞ axis
-            draw.line([(constrained_x, stop_y_1), (constrained_x, k_axis_y)], fill="yellow", width=line_width+2)
+            # Orange line: vertical down from turning line intersection to k∞ axis
             draw.line([(constrained_x, stop_y_1), (constrained_x, k_axis_y)], fill="orange", width=line_width)
             
-            # Arrow for yellow line 2 (pointing down)
+            # Arrow for orange line (pointing down)
             draw.polygon([
                 (constrained_x, k_axis_y),
                 (constrained_x - arrow_size//2, k_axis_y - arrow_size),
