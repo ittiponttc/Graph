@@ -1,573 +1,375 @@
-"""
-AASHTO 1993 Nomograph - Figure 3.3
-Chart for Estimating Composite Modulus of Subgrade Reaction, k∞
-Assuming a Semi-Infinite Subgrade Depth
-
-พัฒนาสำหรับการเรียนการสอนวิศวกรรมถนนและผิวทาง
-"""
-
 import streamlit as st
+from PIL import Image, ImageDraw, ImageFont
+import io
+import os
 import math
-import plotly.graph_objects as go
+from datetime import datetime
 
-# =====================================================
-# ตั้งค่าหน้าเว็บ
-# =====================================================
-st.set_page_config(
-    page_title="AASHTO 1993 - Figure 3.3 Nomograph",
-    page_icon="🛣️",
-    layout="wide"
-)
+# ============================================
+# Helper Functions
+# ============================================
 
-# =====================================================
-# CSS สำหรับ UI
-# =====================================================
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-    
-    .main-header {
-        background: linear-gradient(135deg, #1a365d 0%, #2c5282 50%, #2b6cb0 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    
-    .main-header h1 {
-        color: white;
-        font-family: 'Sarabun', sans-serif;
-        font-size: 1.8rem;
-        margin: 0;
-        font-weight: 700;
-    }
-    
-    .main-header p {
-        color: #bee3f8;
-        font-family: 'Sarabun', sans-serif;
-        font-size: 1rem;
-        margin: 0.5rem 0 0 0;
-    }
-    
-    .result-box {
-        background: linear-gradient(145deg, #2d3748, #1a202c);
-        border: 2px solid #4299e1;
-        border-radius: 12px;
-        padding: 1.5rem;
-        text-align: center;
-        box-shadow: 0 8px 25px rgba(66, 153, 225, 0.3);
-    }
-    
-    .result-label {
-        color: #a0aec0;
-        font-family: 'Sarabun', sans-serif;
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    .result-value {
-        color: #f6e05e;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 2.5rem;
-        font-weight: 700;
-        text-shadow: 0 0 20px rgba(246, 224, 94, 0.5);
-    }
-    
-    .result-unit {
-        color: #63b3ed;
-        font-family: 'Sarabun', sans-serif;
-        font-size: 1.2rem;
-    }
-    
-    .input-section {
-        background: #f7fafc;
-        border-radius: 10px;
-        padding: 1.2rem;
-        border-left: 4px solid #4299e1;
-        margin-bottom: 1rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+def interpolate_log_scale(pixel, p1, v1, p2, v2):
+    """Interpolate value on logarithmic scale."""
+    if v1 <= 0 or v2 <= 0: return 0
+    log_v1 = math.log10(v1)
+    log_v2 = math.log10(v2)
+    t = (pixel - p1) / (p2 - p1) if p2 != p1 else 0
+    log_v = log_v1 + t * (log_v2 - log_v1)
+    return 10 ** log_v
 
-# =====================================================
-# Header
-# =====================================================
-st.markdown("""
-<div class="main-header">
-    <h1>🛣️ AASHTO 1993 Nomograph - Figure 3.3</h1>
-    <p>Chart for Estimating Composite Modulus of Subgrade Reaction (k∞)</p>
-</div>
-""", unsafe_allow_html=True)
+def draw_arrow(draw, start, end, color, width=4, arrow_size=12):
+    """Draw a line with an arrow head at the end."""
+    draw.line([start, end], fill=color, width=width)
+    
+    # Calculate direction vector
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = math.sqrt(dx*dx + dy*dy)
+    if length > 0:
+        dx /= length
+        dy /= length
+        
+        # Perpendicular vector
+        px = -dy
+        py = dx
+        
+        # Arrow points
+        x3 = end[0] - width*dx + arrow_size*dx  # Tip slightly extended
+        y3 = end[1] - width*dy + arrow_size*dy
+        
+        # Back points
+        x4 = end[0] - arrow_size*dx + arrow_size*0.5*px
+        y4 = end[1] - arrow_size*dy + arrow_size*0.5*py
+        x5 = end[0] - arrow_size*dx - arrow_size*0.5*px
+        y5 = end[1] - arrow_size*dy - arrow_size*0.5*py
+        
+        draw.polygon([(end[0], end[1]), (x4, y4), (x5, y5)], fill=color)
 
-# =====================================================
-# สูตรการคำนวณ k∞ ตาม AASHTO 1993
-# =====================================================
-def calculate_k_inf(M_R, D_SB, E_SB):
-    """
-    คำนวณ Composite Modulus of Subgrade Reaction (k∞)
-    ตาม AASHTO 1993 Guide for Design of Pavement Structures
-    """
-    k_roadbed = M_R / 19.4
-    
-    if D_SB > 0 and E_SB > 0:
-        ratio = (E_SB / M_R) ** (1/3)
-        factor = 1 + (D_SB / 38) * ratio
-        k_inf = k_roadbed * (factor ** 2.32)
-    else:
-        k_inf = k_roadbed
-    
-    return k_inf
+# ============================================
+# Word Report Generation
+# ============================================
 
-def calculate_intermediate_k(M_R, D_SB, E_SB):
-    k_from_MR = M_R / 19.4
-    k_inf = calculate_k_inf(M_R, D_SB, E_SB)
-    return k_from_MR, k_inf
+def generate_word_report(params, img1_bytes, img2_bytes=None):
+    """Generate Word report with calculation steps for both graphs."""
+    try:
+        from docx import Document
+        from docx.shared import Inches, Pt, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+    except ImportError:
+        return None, "ไม่พบ library python-docx กรุณาติดตั้งด้วย: pip install python-docx"
+    
+    doc = Document()
+    
+    # Set Thai font
+    style = doc.styles['Normal']
+    style.font.name = 'TH SarabunPSK'
+    style.font.size = Pt(14)
+    
+    # Header
+    title = doc.add_heading('รายการคำนวณ Corrected Modulus of Subgrade Reaction', 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f'วันที่: {datetime.now().strftime("%d/%m/%Y %H:%M")}', style='Normal').alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    # ---------------------------------------------------------
+    # PART 1: Composite Modulus (k_infinity)
+    # ---------------------------------------------------------
+    doc.add_heading('ส่วนที่ 1: การหาค่า Composite Modulus (k∞)', level=1)
+    
+    # Table 1
+    table = doc.add_table(rows=1, cols=3)
+    table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    headers = ['พารามิเตอร์', 'ค่า', 'หน่วย']
+    hdr_cells = table.rows[0].cells
+    for i, h in enumerate(headers):
+        hdr_cells[i].text = h
+        hdr_cells[i].paragraphs[0].runs[0].bold = True
+        
+    data_1 = [
+        ('Roadbed Soil Resilient Modulus (MR)', f"{params.get('MR', 0):,.0f}", 'psi'),
+        ('Subbase Elastic Modulus (ESB)', f"{params.get('ESB', 0):,.0f}", 'psi'),
+        ('Subbase Thickness (DSB)', f"{params.get('DSB', 0):.1f}", 'inches'),
+        ('Composite Modulus (k∞)', f"{params.get('k_inf', 0):,.0f}", 'pci'),
+    ]
+    for p, v, u in data_1:
+        row = table.add_row().cells
+        row[0].text = p
+        row[1].text = v
+        row[2].text = u
+        
+    doc.add_paragraph()
+    if img1_bytes:
+        doc.add_picture(io.BytesIO(img1_bytes), width=Inches(5.5))
+        doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        doc.add_paragraph("รูปที่ 1: Nomograph for Composite Modulus (Figure 3.3)", style='Caption').alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-# =====================================================
-# Layout: Input และ Output
-# =====================================================
-col_input, col_chart = st.columns([1, 2.5])
+    # ---------------------------------------------------------
+    # PART 2: Loss of Support Correction
+    # ---------------------------------------------------------
+    doc.add_page_break()
+    doc.add_heading('ส่วนที่ 2: การปรับแก้ค่า Loss of Support (LS)', level=1)
+    
+    # Table 2
+    table2 = doc.add_table(rows=1, cols=3)
+    table2.style = 'Table Grid'
+    table2.alignment = WD_TABLE_ALIGNMENT.CENTER
+    hdr_cells2 = table2.rows[0].cells
+    for i, h in enumerate(headers):
+        hdr_cells2[i].text = h
+        hdr_cells2[i].paragraphs[0].runs[0].bold = True
+        
+    data_2 = [
+        ('Effective Modulus (k) - จากส่วนที่ 1', f"{params.get('k_inf', 0):,.0f}", 'pci'),
+        ('Loss of Support Factor (LS)', f"{params.get('LS_factor', 0):.1f}", '-'),
+        ('Corrected Modulus (k)', f"{params.get('k_corrected', 0):,.0f}", 'pci'),
+    ]
+    for p, v, u in data_2:
+        row = table2.add_row().cells
+        row[0].text = p
+        row[1].text = v
+        row[2].text = u
 
-with col_input:
-    st.markdown("### 📊 ข้อมูลนำเข้า (Input Parameters)")
+    doc.add_paragraph()
+    if img2_bytes:
+        doc.add_picture(io.BytesIO(img2_bytes), width=Inches(5.5))
+        doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        doc.add_paragraph("รูปที่ 2: Correction for Loss of Support (Figure 3.4)", style='Caption').alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    # Subbase Thickness
-    st.markdown('<div class="input-section">', unsafe_allow_html=True)
-    st.markdown("**1️⃣ Subbase Thickness (D_SB)**")
-    D_SB = st.slider(
-        "ความหนาชั้น Subbase (inches)",
-        min_value=4.0,
-        max_value=18.0,
-        value=8.0,
-        step=0.5,
-        key="dsb"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Footer Note
+    doc.add_paragraph()
+    note = doc.add_paragraph("Reference: AASHTO Guide for Design of Pavement Structures 1993")
+    note.style = 'List Bullet'
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer, None
+
+# ============================================
+# Main Application
+# ============================================
+
+def main():
+    st.set_page_config(page_title="AASHTO Rigid Pavement Calculator", page_icon="🛣️", layout="wide")
     
-    # Subbase Elastic Modulus
-    st.markdown('<div class="input-section">', unsafe_allow_html=True)
-    st.markdown("**2️⃣ Subbase Elastic Modulus (E_SB)**")
-    E_SB_options = [15000, 20000, 25000, 30000, 40000, 50000, 75000, 100000, 
-                   150000, 200000, 300000, 400000, 500000, 750000, 1000000]
-    E_SB = st.select_slider(
-        "โมดูลัสยืดหยุ่นชั้น Subbase (psi)",
-        options=E_SB_options,
-        value=75000,
-        format_func=lambda x: f"{x:,}",
-        key="esb"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.title("🛣️ AASHTO 1993 Rigid Pavement Design Calculator")
+    st.markdown("**เครื่องมือหาค่า k-value และปรับแก้ Loss of Support (LS)**")
     
-    # Roadbed Soil Resilient Modulus
-    st.markdown('<div class="input-section">', unsafe_allow_html=True)
-    st.markdown("**3️⃣ Roadbed Soil Resilient Modulus (M_R)**")
-    M_R_options = list(range(1000, 21000, 500))
-    M_R = st.select_slider(
-        "โมดูลัสความยืดหยุ่นดินคันทาง (psi)",
-        options=M_R_options,
-        value=5000,
-        format_func=lambda x: f"{x:,}",
-        key="mr"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Define Tabs
+    tab1, tab2, tab3 = st.tabs(["📊 ขั้นตอนที่ 1: Composite k∞", "📉 ขั้นตอนที่ 2: Loss of Support", "📋 คู่มือการใช้งาน"])
     
-    # คำนวณผลลัพธ์
-    k_from_MR, k_inf = calculate_intermediate_k(M_R, D_SB, E_SB)
-    
-    # แสดงผลลัพธ์
-    st.markdown("---")
-    st.markdown("### 🎯 ผลการคำนวณ")
-    
-    st.markdown(f"""
-    <div class="result-box">
-        <div class="result-label">Composite Modulus of Subgrade Reaction</div>
-        <div class="result-value">{k_inf:.0f}</div>
-        <div class="result-unit">pci (k∞)</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.info(f"📌 **k จาก M_R (ไม่มี Subbase):** {k_from_MR:.1f} pci")
-    
-    # สูตรที่ใช้
-    with st.expander("📐 สูตรการคำนวณ"):
+    # Initialize Session State
+    if 'k_inf_result' not in st.session_state:
+        st.session_state.k_inf_result = 500  # Default value
+    if 'img1_bytes' not in st.session_state:
+        st.session_state.img1_bytes = None
+    if 'img2_bytes' not in st.session_state:
+        st.session_state.img2_bytes = None
+
+    # =========================================================
+    # TAB 1: Composite Modulus (Existing Logic)
+    # =========================================================
+    with tab1:
+        st.header("1️⃣ หาค่า Composite Modulus of Subgrade Reaction (k∞)")
+        
+        uploaded_file = st.file_uploader("📂 อัปโหลดภาพ Figure 3.3 (Composite k)", type=['png', 'jpg', 'jpeg'], key='uploader_1')
+        
+        if uploaded_file is not None:
+            image = Image.open(uploaded_file).convert("RGB")
+            width, height = image.size
+            img_draw = image.copy()
+            draw = ImageDraw.Draw(img_draw)
+            
+            col_ctrl, col_img = st.columns([1, 2])
+            
+            with col_ctrl:
+                st.subheader("⚙️ ปรับเส้นอ่านค่า")
+                
+                with st.expander("1. เส้น Turning Line (เขียว)", expanded=True):
+                    gx1 = st.slider("X เริ่ม", 0, width, int(width*0.4), key="gx1")
+                    gy1 = st.slider("Y เริ่ม", 0, height, int(height*0.3), key="gy1")
+                    gx2 = st.slider("X จบ", 0, width, int(width*0.7), key="gx2")
+                    gy2 = st.slider("Y จบ", 0, height, int(height*0.6), key="gy2")
+                    
+                    # Draw Turning Line
+                    draw.line([(gx1, gy1), (gx2, gy2)], fill="green", width=5)
+                    slope_green = (gy2 - gy1) / (gx2 - gx1) if (gx2 - gx1) != 0 else 0
+
+                with st.expander("2. พารามิเตอร์ (ส้ม/แดง/น้ำเงิน)", expanded=True):
+                    start_x = st.slider("ตำแหน่งแกน D_sb (ซ้าย)", 0, width, int(width*0.15), key="s1_sx")
+                    stop_y_esb = st.slider("ระดับค่า ESB (บน)", 0, height, int(height*0.10), key="s1_sy_esb")
+                    stop_y_mr = st.slider("ระดับค่า MR (ล่าง)", 0, height, int(height*0.55), key="s1_sy_mr")
+
+                    # Calculate Intersection
+                    target_y = stop_y_mr
+                    if slope_green != 0:
+                        constrained_x = gx1 + (target_y - gy1) / slope_green
+                    else:
+                        constrained_x = gx1
+                    constrained_x = int(constrained_x)
+                
+                # Draw Box Logic (Step 1)
+                lw = 4
+                # Top Orange (ESB)
+                draw_arrow(draw, (start_x, stop_y_esb), (constrained_x, stop_y_esb), "orange", lw)
+                # Left Red (MR)
+                draw_arrow(draw, (start_x, stop_y_esb), (start_x, stop_y_mr), "red", lw)
+                # Bottom DarkBlue
+                draw_arrow(draw, (start_x, stop_y_mr), (constrained_x, stop_y_mr), "darkblue", lw)
+                # Right Blue (Result) - Upwards
+                draw_arrow(draw, (constrained_x, stop_y_mr), (constrained_x, stop_y_esb), "blue", lw)
+                
+                # Intersection Dot
+                r = 8
+                draw.ellipse([(constrained_x-r, stop_y_mr-r), (constrained_x+r, stop_y_mr+r)], fill="black", outline="white")
+
+                st.markdown("---")
+                st.subheader("📝 บันทึกค่าที่อ่านได้")
+                mr_val = st.number_input("MR (psi)", value=7000, step=500)
+                esb_val = st.number_input("ESB (psi)", value=50000, step=1000)
+                dsb_val = st.number_input("DSB (inches)", value=6.0, step=0.5)
+                k_inf_val = st.number_input("ค่า k∞ ที่อ่านได้ (pci)", value=400, step=10)
+                
+                # Save to session
+                st.session_state.k_inf_result = k_inf_val
+                
+                # Save image for report
+                buf = io.BytesIO()
+                img_draw.save(buf, format='PNG')
+                st.session_state.img1_bytes = buf.getvalue()
+
+            with col_img:
+                st.image(img_draw, caption="Step 1: Nomograph Analysis", use_container_width=True)
+
+    # =========================================================
+    # TAB 2: Loss of Support (New Feature)
+    # =========================================================
+    with tab2:
+        st.header("2️⃣ ปรับแก้ Loss of Support (LS)")
+        st.info("ใช้กราฟ Figure 3.4 เพื่อปรับค่า k∞ กรณีที่มีการสูญเสียการรองรับ (LS > 0)")
+        
+        uploaded_file_2 = st.file_uploader("📂 อัปโหลดภาพ Figure 3.4 (LS Correction)", type=['png', 'jpg', 'jpeg'], key='uploader_2')
+        
+        if uploaded_file_2 is not None:
+            img2 = Image.open(uploaded_file_2).convert("RGB")
+            w2, h2 = img2.size
+            img2_draw = img2.copy()
+            draw2 = ImageDraw.Draw(img2_draw)
+            
+            col_ctrl2, col_img2 = st.columns([1, 2])
+            
+            with col_ctrl2:
+                st.subheader("⚙️ กำหนดเส้นกราฟ")
+                
+                # 1. Define LS Line (Red Diagonal)
+                with st.expander("1. เส้น LS (สีแดง)", expanded=True):
+                    st.caption("ปรับเส้นสีแดงให้ทับกับเส้น LS ที่ต้องการ (0, 1, 2, 3)")
+                    ls_x1 = st.slider("จุดเริ่ม X", 0, w2, int(w2*0.1), key="ls_x1")
+                    ls_y1 = st.slider("จุดเริ่ม Y", 0, h2, int(h2*0.9), key="ls_y1")
+                    ls_x2 = st.slider("จุดจบ X", 0, w2, int(w2*0.9), key="ls_x2")
+                    ls_y2 = st.slider("จุดจบ Y", 0, h2, int(h2*0.1), key="ls_y2")
+                    
+                    # Draw LS Line
+                    draw2.line([(ls_x1, ls_y1), (ls_x2, ls_y2)], fill="red", width=6)
+                    
+                    # Calculate Slope of Red Line
+                    if ls_x2 - ls_x1 != 0:
+                        m_red = (ls_y2 - ls_y1) / (ls_x2 - ls_x1)
+                        c_red = ls_y1 - m_red * ls_x1
+                    else:
+                        m_red = None # Vertical line (unlikely for LS)
+
+                # 2. Input k value (Vertical Green)
+                with st.expander("2. ค่า Effective k (เส้นแนวตั้ง)", expanded=True):
+                    st.caption(f"ค่าจาก Step 1 คือ: {st.session_state.k_inf_result} pci")
+                    k_input_x = st.slider("ตำแหน่งแกน X (ค่า k)", 0, w2, int(w2*0.5), key="k_pos_x")
+                    
+                    # Calculate Intersection
+                    if m_red is not None:
+                        intersect_y = m_red * k_input_x + c_red
+                    else:
+                        intersect_y = h2/2 # Fallback
+                    
+                    intersect_y = int(intersect_y)
+                    
+                    # Draw Green Lines (Perpendicular)
+                    # 1. Vertical Up (Green)
+                    draw_arrow(draw2, (k_input_x, h2-10), (k_input_x, intersect_y), "springgreen", width=5)
+                    # 2. Horizontal Left (Green)
+                    draw_arrow(draw2, (k_input_x, intersect_y), (10, intersect_y), "springgreen", width=5)
+                    
+                    # Intersection Dot
+                    draw2.ellipse([(k_input_x-8, intersect_y-8), (k_input_x+8, intersect_y+8)], fill="black", outline="white", width=2)
+
+                st.markdown("---")
+                st.subheader("📝 บันทึกผลลัพธ์")
+                ls_factor = st.number_input("Loss of Support (LS)", value=1.0, step=0.5)
+                k_corrected = st.number_input("Corrected k (pci)", value=st.session_state.k_inf_result - 100, step=10)
+                
+                # Save image 2
+                buf2 = io.BytesIO()
+                img2_draw.save(buf2, format='PNG')
+                st.session_state.img2_bytes = buf2.getvalue()
+                
+                # -------------------------
+                # EXPORT REPORT
+                # -------------------------
+                st.markdown("---")
+                params = {
+                    'MR': mr_val if 'mr_val' in locals() else 0,
+                    'ESB': esb_val if 'esb_val' in locals() else 0,
+                    'DSB': dsb_val if 'dsb_val' in locals() else 0,
+                    'k_inf': st.session_state.k_inf_result,
+                    'LS_factor': ls_factor,
+                    'k_corrected': k_corrected
+                }
+                
+                if st.button("📄 สร้างรายงาน (Word)", key="btn_report"):
+                    with st.spinner("กำลังสร้างรายงาน..."):
+                        # Check if img1 exists
+                        img1_b = st.session_state.get('img1_bytes', None)
+                        img2_b = st.session_state.get('img2_bytes', None)
+                        
+                        doc_file, err = generate_word_report(params, img1_b, img2_b)
+                        if err:
+                            st.error(err)
+                        else:
+                            st.download_button(
+                                label="📥 ดาวน์โหลด Word Report",
+                                data=doc_file,
+                                file_name=f"AASHTO_Design_{datetime.now().strftime('%Y%m%d')}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+
+            with col_img2:
+                st.image(img2_draw, caption="Step 2: LS Correction Analysis", use_container_width=True)
+                
+        else:
+            st.info("👆 กรุณาอัปโหลดภาพ Figure 3.4 เพื่อเริ่มใช้งานในส่วนนี้")
+            st.image("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6sJ_yT-h-_GkH_o-X1_tY-m_u-z_x-o_w-g&usqp=CAU", caption="ตัวอย่างกราฟ Figure 3.4", width=300)
+
+    # =========================================================
+    # TAB 3: Guide
+    # =========================================================
+    with tab3:
+        st.header("📋 คู่มือการใช้งาน")
         st.markdown("""
-        **AASHTO 1993 Composite k-value Formula:**
-        
-        ```
-        k_roadbed = M_R / 19.4
-        
-        k∞ = k_roadbed × [1 + (D_SB/38) × (E_SB/M_R)^(1/3)]^2.32
-        ```
-        
-        **โดยที่:**
-        - M_R = Roadbed Soil Resilient Modulus (psi)
-        - D_SB = Subbase Thickness (inches)
-        - E_SB = Subbase Elastic Modulus (psi)
-        - k∞ = Composite Modulus of Subgrade Reaction (pci)
-        
-        **หมายเหตุ:** สูตรนี้สมมติ Semi-Infinite Subgrade Depth 
-        (ความลึก > 10 ft จากผิว Subgrade)
+        ### ขั้นตอนที่ 1: หาค่า Composite k∞
+        1. อัปโหลดรูป **Figure 3.3**
+        2. ปรับ **Turning Line (เส้นเขียว)** ให้ตรงกับเส้นบนกราฟ
+        3. ปรับตำแหน่งลูกศรสีแดง/ส้ม ให้ตรงกับค่า **MR** และ **ESB**
+        4. จุดตัดจะแสดงค่า **k∞** (แกนขวา)
+
+        ### ขั้นตอนที่ 2: ปรับแก้ Loss of Support (LS)
+        1. อัปโหลดรูป **Figure 3.4**
+        2. **ปรับเส้นสีแดง (Diagonal)** ให้ทับกับเส้น LS ที่ต้องการ (เช่น LS=1.0)
+           * *หมายเหตุ: หากเลือก LS=0 ให้ลากเส้นสีแดงทับเส้นทึบดำ (เส้นสมมติ 45 องศา)*
+        3. เลื่อน **Slider ตำแหน่งแกน X** ให้ตรงกับค่า k ที่ได้จากขั้นตอนที่ 1
+        4. โปรแกรมจะวาดเส้นสีเขียว **ตั้งฉากอัตโนมัติ** (ขึ้นชนเส้นแดง แล้วเลี้ยวซ้าย)
+        5. อ่านค่า Corrected k จากแกน Y ด้านซ้าย
         """)
 
-# =====================================================
-# วาด Nomograph ด้วย Plotly
-# =====================================================
-with col_chart:
-    st.markdown("### 📈 AASHTO 1993 Nomograph - Figure 3.3")
-    
-    # กำหนดขอบเขต
-    E_SB_log_min = math.log10(15000)
-    E_SB_log_max = math.log10(1000000)
-    D_SB_min, D_SB_max = 6, 18
-    M_R_log_min = math.log10(1000)
-    M_R_log_max = math.log10(20000)
-    k_log_min = math.log10(50)
-    k_log_max = math.log10(2000)
-    
-    # สร้าง Figure
-    fig = go.Figure()
-    
-    # =====================================================
-    # วาดเส้น Grid พื้นฐาน (สีเทา)
-    # =====================================================
-    
-    # Grid สำหรับ E_SB (แนวนอน ส่วนบน)
-    E_SB_values = [15000, 30000, 50000, 100000, 200000, 400000, 1000000]
-    for E in E_SB_values:
-        y_pos = 50 + 50 * (math.log10(E) - E_SB_log_min) / (E_SB_log_max - E_SB_log_min)
-        fig.add_trace(go.Scatter(
-            x=[0, 35], y=[y_pos, y_pos],
-            mode='lines',
-            line=dict(color='lightgray', width=0.5),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-    
-    # Grid สำหรับ D_SB (แนวตั้ง)
-    D_SB_values = [6, 8, 10, 12, 14, 16, 18]
-    for D in D_SB_values:
-        x_pos = 35 * (D - D_SB_min) / (D_SB_max - D_SB_min)
-        fig.add_trace(go.Scatter(
-            x=[x_pos, x_pos], y=[25, 75],
-            mode='lines',
-            line=dict(color='lightgray', width=0.5),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-    
-    # Grid สำหรับ M_R (แนวนอน ส่วนล่าง)
-    M_R_values = [1000, 2000, 5000, 10000, 20000]
-    for M in M_R_values:
-        y_pos = 25 - 25 * (math.log10(M) - M_R_log_min) / (M_R_log_max - M_R_log_min)
-        fig.add_trace(go.Scatter(
-            x=[0, 100], y=[y_pos, y_pos],
-            mode='lines',
-            line=dict(color='lightgray', width=0.5),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-    
-    # Grid สำหรับ k∞ (แนวตั้ง ส่วนขวา)
-    k_values = [50, 100, 200, 300, 500, 800, 1000, 1500, 2000]
-    for k in k_values:
-        x_pos = 70 + 30 * (math.log10(k) - k_log_min) / (k_log_max - k_log_min)
-        fig.add_trace(go.Scatter(
-            x=[x_pos, x_pos], y=[0, 100],
-            mode='lines',
-            line=dict(color='lightgray', width=0.5),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-    
-    # =====================================================
-    # วาด Turning Line (เส้นทแยงมุมหลัก)
-    # =====================================================
-    fig.add_trace(go.Scatter(
-        x=[35, 70], y=[50, 25],
-        mode='lines',
-        line=dict(color='black', width=3),
-        name='Turning Line',
-        hoverinfo='name'
-    ))
-    
-    # Label สำหรับ Turning Line
-    fig.add_annotation(
-        x=52, y=40,
-        text="Turning Line",
-        showarrow=False,
-        font=dict(size=12, color='black'),
-        textangle=-33
-    )
-    
-    # =====================================================
-    # วาดเส้นเฉียงจาก E_SB (Fan Lines)
-    # =====================================================
-    for E in [15000, 50000, 100000, 300000, 1000000]:
-        y_start = 50 + 50 * (math.log10(E) - E_SB_log_min) / (E_SB_log_max - E_SB_log_min)
-        y_end = 50 + (y_start - 50) * 0.2
-        fig.add_trace(go.Scatter(
-            x=[0, 35], y=[y_start, y_end],
-            mode='lines',
-            line=dict(color='gray', width=0.8),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-    
-    # =====================================================
-    # คำนวณตำแหน่งสำหรับเส้นสีแดง (User Input)
-    # =====================================================
-    
-    # 1. ตำแหน่ง E_SB บนแกน Y (ส่วนบน)
-    y_E_SB = 50 + 50 * (math.log10(E_SB) - E_SB_log_min) / (E_SB_log_max - E_SB_log_min)
-    
-    # 2. ตำแหน่ง D_SB บนแกน X
-    x_D_SB = 35 * (D_SB - D_SB_min) / (D_SB_max - D_SB_min)
-    
-    # 3. จุดบน Turning Line
-    t_ratio = x_D_SB / 35
-    x_turning = 35 + t_ratio * 35
-    y_turning = 50 - t_ratio * 25
-    
-    # 4. ตำแหน่ง M_R บนแกน Y (ส่วนล่าง)
-    y_M_R = 25 - 25 * (math.log10(M_R) - M_R_log_min) / (M_R_log_max - M_R_log_min)
-    
-    # 5. ตำแหน่ง k∞ บนแกน X (ส่วนขวา)
-    k_inf_clipped = max(50, min(k_inf, 2000))
-    x_k_inf = 70 + 30 * (math.log10(k_inf_clipped) - k_log_min) / (k_log_max - k_log_min)
-    
-    # =====================================================
-    # วาดเส้นสีแดง (User Path)
-    # =====================================================
-    line_color = 'red'
-    line_width = 3
-    
-    # เส้นที่ 1: E_SB → D_SB (แนวนอน)
-    fig.add_trace(go.Scatter(
-        x=[0, x_D_SB], y=[y_E_SB, y_E_SB],
-        mode='lines',
-        line=dict(color=line_color, width=line_width),
-        name='User Path',
-        legendgroup='user',
-        showlegend=True,
-        hoverinfo='skip'
-    ))
-    
-    # เส้นที่ 2: D_SB → Turning Line (แนวตั้งลง)
-    fig.add_trace(go.Scatter(
-        x=[x_D_SB, x_D_SB], y=[y_E_SB, y_turning],
-        mode='lines',
-        line=dict(color=line_color, width=line_width),
-        legendgroup='user',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    # เส้นที่ 3: Turning Line → M_R (แนวเฉียง)
-    fig.add_trace(go.Scatter(
-        x=[x_turning, 70], y=[y_turning, y_M_R],
-        mode='lines',
-        line=dict(color=line_color, width=line_width),
-        legendgroup='user',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    # เส้นที่ 4: M_R → k∞ (แนวนอนไปขวา)
-    fig.add_trace(go.Scatter(
-        x=[70, x_k_inf], y=[y_M_R, y_M_R],
-        mode='lines',
-        line=dict(color=line_color, width=line_width),
-        legendgroup='user',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    # เส้นที่ 5: k∞ ขึ้นไปด้านบน
-    fig.add_trace(go.Scatter(
-        x=[x_k_inf, x_k_inf], y=[y_M_R, 100],
-        mode='lines',
-        line=dict(color=line_color, width=line_width),
-        legendgroup='user',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    # =====================================================
-    # วาดจุดที่สำคัญ (Markers)
-    # =====================================================
-    points_x = [0, x_D_SB, x_turning, 70, x_k_inf]
-    points_y = [y_E_SB, y_E_SB, y_turning, y_M_R, y_M_R]
-    points_text = [
-        f'E_SB = {E_SB:,} psi',
-        f'D_SB = {D_SB:.1f}"',
-        'Turning Point',
-        f'M_R = {M_R:,} psi',
-        f'k∞ = {k_inf:.0f} pci'
-    ]
-    
-    fig.add_trace(go.Scatter(
-        x=points_x, y=points_y,
-        mode='markers+text',
-        marker=dict(color=line_color, size=14, line=dict(color='white', width=2)),
-        text=points_text,
-        textposition=['middle right', 'top center', 'bottom right', 'bottom center', 'top center'],
-        textfont=dict(size=10, color='darkred'),
-        name='Intersection Points',
-        hoverinfo='text'
-    ))
-    
-    # =====================================================
-    # Labels สำหรับแกนต่างๆ
-    # =====================================================
-    
-    # E_SB labels (ซ้ายบน)
-    for E in [15000, 50000, 100000, 400000, 1000000]:
-        y_pos = 50 + 50 * (math.log10(E) - E_SB_log_min) / (E_SB_log_max - E_SB_log_min)
-        label = f'{E//1000}k' if E >= 1000 else str(E)
-        fig.add_annotation(x=-2, y=y_pos, text=label, showarrow=False, 
-                          font=dict(size=9), xanchor='right')
-    
-    # D_SB labels (กลาง)
-    for D in D_SB_values:
-        x_pos = 35 * (D - D_SB_min) / (D_SB_max - D_SB_min)
-        fig.add_annotation(x=x_pos, y=48, text=str(int(D)), showarrow=False, 
-                          font=dict(size=9), yanchor='top')
-    
-    # M_R labels (ซ้ายล่าง)
-    for M in [1000, 2000, 5000, 10000, 20000]:
-        y_pos = 25 - 25 * (math.log10(M) - M_R_log_min) / (M_R_log_max - M_R_log_min)
-        label = f'{M//1000}k'
-        fig.add_annotation(x=-2, y=y_pos, text=label, showarrow=False, 
-                          font=dict(size=9), xanchor='right')
-    
-    # k∞ labels (ขวาบน)
-    for k in [50, 100, 200, 500, 1000, 2000]:
-        x_pos = 70 + 30 * (math.log10(k) - k_log_min) / (k_log_max - k_log_min)
-        fig.add_annotation(x=x_pos, y=102, text=str(k), showarrow=False, 
-                          font=dict(size=9), textangle=-45)
-    
-    # =====================================================
-    # Axis Labels
-    # =====================================================
-    fig.add_annotation(x=-8, y=75, text="E_SB (psi)", showarrow=False,
-                      font=dict(size=11, color='darkblue'), textangle=-90)
-    fig.add_annotation(x=17, y=46, text="D_SB (inches)", showarrow=False,
-                      font=dict(size=11, color='darkblue'))
-    fig.add_annotation(x=-8, y=12, text="M_R (psi)", showarrow=False,
-                      font=dict(size=11, color='darkblue'), textangle=-90)
-    fig.add_annotation(x=85, y=105, text="k∞ (pci)", showarrow=False,
-                      font=dict(size=11, color='darkblue'))
-    
-    # =====================================================
-    # Layout
-    # =====================================================
-    fig.update_layout(
-        title=dict(
-            text='<b>AASHTO 1993 - Figure 3.3: Composite k-value</b>',
-            font=dict(size=16, color='#1a365d'),
-            x=0.5
-        ),
-        xaxis=dict(
-            range=[-15, 105],
-            showgrid=False,
-            showticklabels=False,
-            zeroline=False
-        ),
-        yaxis=dict(
-            range=[-5, 110],
-            showgrid=False,
-            showticklabels=False,
-            zeroline=False
-        ),
-        plot_bgcolor='white',
-        paper_bgcolor='#f8f9fa',
-        height=700,
-        legend=dict(
-            x=0.7,
-            y=0.98,
-            bgcolor='rgba(255,255,255,0.9)',
-            bordercolor='lightgray',
-            borderwidth=1
-        ),
-        margin=dict(l=80, r=20, t=60, b=20)
-    )
-    
-    # แสดงกราฟ
-    st.plotly_chart(fig, use_container_width=True)
-
-# =====================================================
-# ตารางสรุป
-# =====================================================
-st.markdown("---")
-st.markdown("### 📋 สรุปการคำนวณ")
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.metric(
-        label="🔹 E_SB (Subbase Modulus)",
-        value=f"{E_SB:,} psi"
-    )
-
-with col2:
-    st.metric(
-        label="🔹 D_SB (Subbase Thickness)",
-        value=f"{D_SB:.1f} inches"
-    )
-
-with col3:
-    st.metric(
-        label="🔹 M_R (Roadbed Modulus)",
-        value=f"{M_R:,} psi"
-    )
-
-with col4:
-    st.metric(
-        label="🎯 k∞ (Composite k-value)",
-        value=f"{k_inf:.0f} pci",
-        delta=f"+{(k_inf/k_from_MR - 1)*100:.1f}% from base k"
-    )
-
-# =====================================================
-# คำอธิบายเพิ่มเติม
-# =====================================================
-with st.expander("📚 ทฤษฎีและหลักการ"):
-    st.markdown("""
-    ### Composite Modulus of Subgrade Reaction (k∞)
-    
-    **k∞** คือ ค่าโมดูลัสปฏิกิริยาของดินใต้ทางแบบผสม (Composite) ที่รวมผลของ:
-    1. ความแข็งแรงของดินคันทาง (Roadbed Soil)
-    2. ความแข็งแรงของชั้น Subbase
-    3. ความหนาของชั้น Subbase
-    
-    ### สมมติฐานของ Figure 3.3
-    
-    - **Semi-Infinite Subgrade Depth:** ความลึกของ Subgrade มากกว่า 10 ฟุต จากผิว Subgrade
-    - ใช้หลักการ Odemark's Equivalent Thickness Method
-    
-    ### ขั้นตอนการอ่าน Nomograph
-    
-    1. เริ่มจากค่า **E_SB** ที่แกนซ้ายบน
-    2. ลากเส้นแนวนอนไปตัดเส้นความหนา **D_SB**
-    3. จากจุดตัด ลากเส้นลงไปยัง **Turning Line**
-    4. จาก Turning Line ลากเส้นไปตัดค่า **M_R** ที่แกนซ้ายล่าง
-    5. จากจุดตัด M_R ลากเส้นแนวนอนไปอ่านค่า **k∞**
-    
-    ### Reference
-    
-    - AASHTO Guide for Design of Pavement Structures, 1993
-    - Part II, Chapter 3: Rigid Pavement Design
-    """)
-
-# =====================================================
-# Footer
-# =====================================================
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #718096; font-size: 0.85rem;'>
-    <p>🛣️ AASHTO 1993 Nomograph Calculator | Figure 3.3</p>
-    <p>พัฒนาสำหรับการเรียนการสอนวิศวกรรมถนนและผิวทาง</p>
-    <p>ภาควิชาครุศาสตร์โยธา มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ</p>
-</div>
-""", unsafe_allow_html=True)
+if __name__ == "__main__":
+    main()
