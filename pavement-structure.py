@@ -9,6 +9,7 @@ import matplotlib.patches as patches
 import numpy as np
 import matplotlib as mpl
 from io import BytesIO
+import json
 
 # ตั้งค่า font ภาษาไทย (รองรับกรณีไม่มี font)
 try:
@@ -168,22 +169,76 @@ def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้
 with st.sidebar:
     st.header("⚙️ ตั้งค่าทั่วไป")
     
-    chart_title = st.text_input("หัวข้อรูป", value="โครงสร้างชั้นทาง โครงการ......")
+    # =====================================================
+    # Upload JSON
+    # =====================================================
+    st.markdown("---")
+    st.subheader("📂 โหลด/บันทึกข้อมูล")
+    
+    uploaded_json = st.file_uploader("📂 โหลดข้อมูลจากไฟล์ JSON", type=['json'])
+    
+    if uploaded_json is not None:
+        try:
+            loaded_data = json.load(uploaded_json)
+            
+            # ตรวจสอบว่าเป็นไฟล์ใหม่
+            file_id = f"{uploaded_json.name}_{uploaded_json.size}"
+            if st.session_state.get('last_uploaded_file') != file_id:
+                st.session_state['last_uploaded_file'] = file_id
+                
+                # อัพเดท session_state สำหรับ chart_title
+                st.session_state['input_chart_title'] = loaded_data.get('chart_title', "โครงสร้างชั้นทาง โครงการ......")
+                
+                # อัพเดท session_state สำหรับ num_layers
+                st.session_state['input_num_layers'] = loaded_data.get('num_layers', 4)
+                
+                # อัพเดท session_state สำหรับ layers
+                if 'layers' in loaded_data:
+                    num_layers_loaded = len(loaded_data['layers'])
+                    st.session_state['input_num_layers'] = num_layers_loaded
+                    
+                    for i, layer_data in enumerate(loaded_data['layers']):
+                        st.session_state[f'input_material_{i}'] = layer_data.get('name', 'กำหนดเอง')
+                        st.session_state[f'input_thickness_{i}'] = layer_data.get('thickness', 20)
+                        st.session_state[f'input_color_{i}'] = layer_data.get('color', '#cccccc')
+                        st.session_state[f'input_pattern_{i}'] = layer_data.get('pattern', 'solid')
+                        st.session_state[f'input_hatch_{i}'] = layer_data.get('hatch_style', '///')
+                
+                st.success("✅ โหลดข้อมูลสำเร็จ!")
+                st.rerun()
+                
+        except Exception as e:
+            st.error(f"❌ ไม่สามารถอ่านไฟล์ได้: {e}")
+    
+    st.markdown("---")
+    
+    chart_title = st.text_input(
+        "หัวข้อรูป", 
+        value=st.session_state.get('input_chart_title', "โครงสร้างชั้นทาง โครงการ......"),
+        key="input_chart_title"
+    )
     
     num_layers = st.number_input(
         "จำนวนชั้น",
         min_value=1,
         max_value=10,
-        value=4,
-        step=1
+        value=st.session_state.get('input_num_layers', 4),
+        step=1,
+        key="input_num_layers"
     )
     
     st.markdown("---")
     st.header("📥 โหลดตัวอย่าง")
     
+    preset_options = ["-- กำหนดเอง --", "ทางลาดยาง (Flexible)", "ทางคอนกรีต (Rigid)"]
+    current_preset = st.session_state.get('input_preset_choice', "-- กำหนดเอง --")
+    default_preset_idx = preset_options.index(current_preset) if current_preset in preset_options else 0
+    
     preset_choice = st.selectbox(
         "เลือกตัวอย่างโครงสร้าง",
-        ["-- กำหนดเอง --", "ทางลาดยาง (Flexible)", "ทางคอนกรีต (Rigid)"]
+        preset_options,
+        index=default_preset_idx,
+        key="input_preset_choice"
     )
     
     if st.button("โหลดตัวอย่าง", use_container_width=True):
@@ -195,9 +250,9 @@ with st.sidebar:
                 {"name": "ดินถม (Fill Material)", "thickness": 100, "color": "#f5deb3", "pattern": "solid"}
             ]
             st.rerun()
-        elif preset_choice == "ผิวทางคอนกรีต (Rigid)":
+        elif preset_choice == "ทางคอนกรีต (Rigid)":
             st.session_state['preset_layers'] = [
-                {"name": "ผิวทางคอนกรีต (JPCP)", "thickness": 28, "color": "#a9a9a9", "pattern": "solid"},
+                {"name": "ผิวทางคอนกรีต (JPCP/JRCP)", "thickness": 28, "color": "#a9a9a9", "pattern": "solid"},
                 {"name": "Lean Concrete Base", "thickness": 15, "color": "#c0c0c0", "pattern": "hatch"},
                 {"name": "หินคลุก (Crushed Rock)", "thickness": 20, "color": "#d2b48c", "pattern": "dots"},
                 {"name": "ดินเดิม (Subgrade)", "thickness": 50, "color": "#deb887", "pattern": "solid"}
@@ -231,41 +286,58 @@ for row in range(rows_needed):
                 
                 # เลือกวัสดุ preset
                 material_list = list(PRESET_MATERIALS.keys())
-                default_material_idx = 0
-                if preset_data and preset_data['name'] in material_list:
-                    default_material_idx = material_list.index(preset_data['name'])
+                
+                # หา default material จาก session_state หรือ preset
+                default_material = st.session_state.get(f'input_material_{layer_idx}', None)
+                if default_material is None and preset_data:
+                    default_material = preset_data['name']
+                if default_material is None:
+                    default_material = material_list[0]
+                
+                default_material_idx = material_list.index(default_material) if default_material in material_list else 0
                 
                 material = st.selectbox(
                     "ประเภทวัสดุ",
                     material_list,
                     index=default_material_idx,
-                    key=f"material_{layer_idx}"
+                    key=f"input_material_{layer_idx}"
                 )
                 
                 # ใช้ชื่อวัสดุที่เลือกเป็นป้ายกำกับอัตโนมัติ
                 name = material
                 
                 # ความหนา
-                default_thickness = preset_data['thickness'] if preset_data else 20
+                default_thickness = st.session_state.get(f'input_thickness_{layer_idx}', None)
+                if default_thickness is None and preset_data:
+                    default_thickness = preset_data['thickness']
+                if default_thickness is None:
+                    default_thickness = 20
+                
                 thickness = st.number_input(
                     "ความหนา (cm)",
                     min_value=1,
                     max_value=500,
                     value=int(default_thickness),
                     step=5,
-                    key=f"thickness_{layer_idx}"
+                    key=f"input_thickness_{layer_idx}"
                 )
                 
                 # สี
-                default_color = PRESET_MATERIALS[material]['color']
+                default_color = st.session_state.get(f'input_color_{layer_idx}', None)
+                if default_color is None:
+                    default_color = PRESET_MATERIALS[material]['color']
+                
                 color = st.color_picker(
                     "สี",
                     value=default_color,
-                    key=f"color_{layer_idx}"
+                    key=f"input_color_{layer_idx}"
                 )
                 
                 # Pattern
-                default_pattern = PRESET_MATERIALS[material]['pattern']
+                default_pattern = st.session_state.get(f'input_pattern_{layer_idx}', None)
+                if default_pattern is None:
+                    default_pattern = PRESET_MATERIALS[material]['pattern']
+                
                 pattern_keys = list(PATTERN_OPTIONS.keys())
                 default_pattern_idx = pattern_keys.index(default_pattern) if default_pattern in pattern_keys else 0
                 
@@ -274,17 +346,22 @@ for row in range(rows_needed):
                     pattern_keys,
                     format_func=lambda x: PATTERN_OPTIONS[x],
                     index=default_pattern_idx,
-                    key=f"pattern_{layer_idx}"
+                    key=f"input_pattern_{layer_idx}"
                 )
                 
                 # Hatch style (ถ้าเลือก hatch)
+                default_hatch = st.session_state.get(f'input_hatch_{layer_idx}', '///')
+                hatch_keys = list(HATCH_STYLES.keys())
+                default_hatch_idx = hatch_keys.index(default_hatch) if default_hatch in hatch_keys else 0
+                
                 hatch_style = "///"
                 if pattern == "hatch":
                     hatch_style = st.selectbox(
                         "รูปแบบเส้น",
-                        list(HATCH_STYLES.keys()),
+                        hatch_keys,
                         format_func=lambda x: HATCH_STYLES[x],
-                        key=f"hatch_{layer_idx}"
+                        index=default_hatch_idx,
+                        key=f"input_hatch_{layer_idx}"
                     )
                 
                 # เก็บข้อมูลชั้น
@@ -338,6 +415,29 @@ with col2:
             st.write(f"- ความหนา: {layer['thickness']} cm")
             st.write(f"- รูปแบบ: {PATTERN_OPTIONS[layer['pattern']]}")
             st.markdown(f"- สี: <span style='background-color:{layer['color']}; padding: 2px 10px; border-radius: 3px;'>&nbsp;&nbsp;&nbsp;</span> {layer['color']}", unsafe_allow_html=True)
+
+# =====================================================
+# Download JSON
+# =====================================================
+st.markdown("---")
+st.subheader("💾 บันทึกข้อมูล")
+
+# สร้างข้อมูลสำหรับ export
+export_data = {
+    'chart_title': chart_title,
+    'num_layers': int(num_layers),
+    'layers': layers
+}
+
+json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
+
+st.download_button(
+    label="💾 Download Input (JSON)",
+    data=json_str,
+    file_name="pavement_structure_data.json",
+    mime="application/json",
+    use_container_width=True
+)
 
 # =====================================================
 # Footer
