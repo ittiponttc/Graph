@@ -288,93 +288,125 @@ HATCH_STYLES = {
 # =====================================================
 # ฟังก์ชันวาดโครงสร้างชั้นทาง
 # =====================================================
-def draw_pavement_structure(layers, figsize=(9, 6), title="โครงสร้างชั้นทาง"):
+def draw_pavement_structure(layers, figsize=(6, 5), title="โครงสร้างชั้นทาง"):
     total_thickness = sum(layer['thickness'] for layer in layers)
+    n = len(layers)
+
+    # --- coordinate system ---
+    # ใช้ 1 unit = 1 cm จริง แต่ scale ให้ความสูงรวมไม่เกิน 100 units
     scale = 100 / max(total_thickness, 100)
 
-    fig_h = max(5, min(9, total_thickness / 25))
-    fig, ax = plt.subplots(figsize=(figsize[0], fig_h))
+    # figsize กะทัดรัด: กว้างคงที่ 6 นิ้ว, สูงขึ้นกับจำนวนชั้น (ไม่เกิน 7 นิ้ว)
+    fig_w = 6.0
+    fig_h = max(3.0, min(7.0, 2.0 + n * 0.65))
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
     fig.patch.set_facecolor('#ffffff')
 
-    layer_width = 7
-    x_start = 2.5
+    layer_width = 3.5          # ความกว้าง rectangle (units)
+    x_start     = 2.8          # ขอบซ้ายของ rectangle
+    dim_x       = x_start - 0.5   # แกนกลางของ dimension line
+    label_x     = dim_x - 1.1     # ตำแหน่งข้อความ "XX cm"
+    name_x      = x_start + layer_width + 0.4  # ชื่อวัสดุขวา
+
     current_y = total_thickness * scale
 
+    # ขนาดหัวลูกศร — ปรับตามความสูงของ figure
+    arrow_hw = 0.35   # half-width ของหัวลูกศร (units)
+    arrow_hl = 0.55   # ความยาวหัวลูกศร
+
     for i, layer in enumerate(layers):
-        t = layer['thickness'] * scale
+        t     = layer['thickness'] * scale
         color   = layer.get('color', '#888888')
         pattern = layer.get('pattern', 'solid')
         hatch   = layer.get('hatch_style', '///')
         name    = layer.get('name', f'Layer {i+1}')
         y_bot   = current_y - t
+        mid_y   = (y_bot + current_y) / 2
 
-        # วาด rectangle
+        # ── วาด rectangle ──
         if pattern == 'dots':
             rect = patches.Rectangle(
                 (x_start, y_bot), layer_width, t,
-                linewidth=1.5, edgecolor='#444444', facecolor=color
+                linewidth=1.2, edgecolor='#444444', facecolor=color
             )
             ax.add_patch(rect)
             np.random.seed(i * 42)
-            n_dots = max(0, int(t * layer_width * 0.6))
-            if n_dots > 0 and t > 1.5:
-                dx = np.random.uniform(x_start + 0.3, x_start + layer_width - 0.3, n_dots)
+            n_dots = max(0, int(t * layer_width * 0.5))
+            if n_dots > 0 and t > 1.2:
+                dx = np.random.uniform(x_start + 0.2, x_start + layer_width - 0.2, n_dots)
                 dy = np.random.uniform(y_bot + t*0.1, y_bot + t*0.9, n_dots)
-                ax.scatter(dx, dy, s=8, c='#666666', alpha=0.55, zorder=3)
+                ax.scatter(dx, dy, s=6, c='#666666', alpha=0.55, zorder=3)
         elif pattern == 'hatch':
             rect = patches.Rectangle(
                 (x_start, y_bot), layer_width, t,
-                linewidth=1.5, edgecolor='#444444', facecolor=color, hatch=hatch
+                linewidth=1.2, edgecolor='#444444', facecolor=color, hatch=hatch
             )
             ax.add_patch(rect)
         else:
             rect = patches.Rectangle(
                 (x_start, y_bot), layer_width, t,
-                linewidth=1.5, edgecolor='#444444', facecolor=color
+                linewidth=1.2, edgecolor='#444444', facecolor=color
             )
             ax.add_patch(rect)
 
-        # Dimension line ซ้าย
-        dim_x = x_start - 1.6
-        mid_y = (y_bot + current_y) / 2
-        # เส้นขีด
-        ax.plot([dim_x - 0.15, dim_x + 0.15], [y_bot, y_bot],
-                color='#333333', lw=1.0, zorder=5)
-        ax.plot([dim_x - 0.15, dim_x + 0.15], [current_y, current_y],
-                color='#333333', lw=1.0, zorder=5)
-        ax.annotate('', xy=(dim_x, y_bot), xytext=(dim_x, current_y),
-                    arrowprops=dict(arrowstyle='<->', color='#333333',
-                                   lw=1.0, mutation_scale=8))
-        ax.text(dim_x - 0.9, mid_y,
+        # ── Dimension line (manual) ──
+        # เส้นแนวตั้งกลาง
+        ax.plot([dim_x, dim_x], [y_bot + arrow_hl, current_y - arrow_hl],
+                color='#1a237e', lw=0.9, zorder=5)
+        # หัวลูกศรบน (ชี้ขึ้น → ยอดอยู่ที่ current_y)
+        arrow_top = patches.FancyArrow(
+            dim_x, current_y - arrow_hl,
+            0, arrow_hl,
+            width=0.0, head_width=arrow_hw, head_length=arrow_hl,
+            fc='#1a237e', ec='#1a237e', zorder=6, length_includes_head=True
+        )
+        ax.add_patch(arrow_top)
+        # หัวลูกศรล่าง (ชี้ลง → ยอดอยู่ที่ y_bot)
+        arrow_bot = patches.FancyArrow(
+            dim_x, y_bot + arrow_hl,
+            0, -arrow_hl,
+            width=0.0, head_width=arrow_hw, head_length=arrow_hl,
+            fc='#1a237e', ec='#1a237e', zorder=6, length_includes_head=True
+        )
+        ax.add_patch(arrow_bot)
+        # เส้นขีดสั้น (witness line) ซ้าย–ขวาที่ขอบบน/ล่าง
+        tick_hw = 0.25
+        ax.plot([dim_x - tick_hw, dim_x + tick_hw], [current_y, current_y],
+                color='#1a237e', lw=0.8, zorder=5)
+        ax.plot([dim_x - tick_hw, dim_x + tick_hw], [y_bot, y_bot],
+                color='#1a237e', lw=0.8, zorder=5)
+
+        # ข้อความขนาด
+        ax.text(label_x, mid_y,
                 f'{int(layer["thickness"])} cm',
-                ha='center', va='center', fontsize=8.5,
+                ha='center', va='center', fontsize=8.0,
                 color='#1a237e', fontweight='bold')
 
-        # ชื่อวัสดุขวา
-        ax.text(x_start + layer_width + 0.55, mid_y, name,
-                ha='left', va='center', fontsize=9.0, color='#212121')
+        # ชื่อวัสดุ
+        ax.text(name_x, mid_y, name,
+                ha='left', va='center', fontsize=8.5, color='#212121')
 
         current_y = y_bot
 
-    # เส้นพื้นดิน (subgrade line)
-    ax.plot([x_start - 0.3, x_start + layer_width + 0.3], [0, 0],
-            color='#5d4037', lw=2.0, ls='--', zorder=6)
+    # เส้นพื้นดิน
+    ax.plot([x_start - 0.2, x_start + layer_width + 0.2], [0, 0],
+            color='#5d4037', lw=1.8, ls='--', zorder=6)
 
     # Title
-    ax.text(x_start + layer_width / 2, total_thickness * scale + 7,
+    ax.text(x_start + layer_width / 2, total_thickness * scale + 5.5,
             title, ha='center', va='center',
-            fontsize=11, fontweight='bold', color='#0d47a1')
+            fontsize=9.5, fontweight='bold', color='#0d47a1')
 
     # Not to Scale
-    ax.text(x_start + layer_width + 0.5, -5.5,
-            'Not to Scale', ha='left', va='center',
-            fontsize=7, style='italic', color='#9e9e9e')
+    ax.text(x_start + layer_width, -4.0,
+            'Not to Scale', ha='right', va='center',
+            fontsize=6.5, style='italic', color='#9e9e9e')
 
-    ax.set_xlim(-0.5, 16)
-    ax.set_ylim(-10, total_thickness * scale + 14)
+    ax.set_xlim(-0.5, 13)
+    ax.set_ylim(-8, total_thickness * scale + 10)
     ax.set_aspect('equal')
     ax.axis('off')
-    plt.tight_layout(pad=0.5)
+    plt.tight_layout(pad=0.3)
     return fig
 
 # =====================================================
