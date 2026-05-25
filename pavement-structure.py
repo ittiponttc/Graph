@@ -262,7 +262,7 @@ PRESET_MATERIALS = {
     "พื้นทาง CTB":                          {"color": "#c8c8c8", "pattern": "hatch"},
     "Lean Concrete Base":                   {"color": "#b8b8b8", "pattern": "hatch"},
     "หินคลุก (Crushed Rock)":              {"color": "#c8a96e", "pattern": "dots"},
-    "หินคลุกผสมซีเมนต์ (Soil-Cement)":    {"color": "#b0c4a0", "pattern": "hatch"},
+    "หินคลุกผสมซีเมนต์ (MOD.Crushed Rock)":    {"color": "#b0c4a0", "pattern": "hatch"},
     "รองพื้นทางวัสดุมวลรวม":              {"color": "#d4a06a", "pattern": "solid"},
     "ดินถมคันทาง (Embankment)":            {"color": "#e8d4a0", "pattern": "solid"},
     "ดินเดิม (Subgrade)":                  {"color": "#c8a87a", "pattern": "solid"},
