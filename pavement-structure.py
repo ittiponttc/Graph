@@ -1,6 +1,7 @@
 """
 Streamlit App: โปรแกรมวาดรูปโครงสร้างชั้นทาง (Pavement Structure Graphic Generator)
-สามารถกำหนดจำนวนชั้น ความหนา และชนิดวัสดุได้
+v2.0 - Two-Column Layout, Blue Theme, Live Preview
+พัฒนาโดย รศ.ดร.อิทธิพล มีผล ภาควิชาครุศาสตร์โยธา มจพ.
 """
 
 import streamlit as st
@@ -11,441 +12,647 @@ import matplotlib as mpl
 from io import BytesIO
 import json
 
-# ตั้งค่า font ภาษาไทย (รองรับกรณีไม่มี font)
-try:
-    mpl.rcParams['font.family'] = 'Garuda'
-except:
-    pass
-mpl.rcParams['axes.unicode_minus'] = False
-
+# =====================================================
+# ตั้งค่า Font ภาษาไทย
+# =====================================================
 import matplotlib.font_manager as fm
 thai_fonts = ['Garuda', 'TH Sarabun New', 'Sarabun', 'Noto Sans Thai', 'Tahoma']
 for font in thai_fonts:
     if font in [f.name for f in fm.fontManager.ttflist]:
         mpl.rcParams['font.family'] = font
         break
+mpl.rcParams['axes.unicode_minus'] = False
 
 # =====================================================
 # ตั้งค่าหน้าเว็บ
 # =====================================================
 st.set_page_config(
-    page_title="โปรแกรมวาดโครงสร้างชั้นทาง",
+    page_title="Pavement Structure Generator",
     page_icon="🛣️",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-st.title("🛣️ โปรแกรมวาดรูปโครงสร้างชั้นทาง")
-st.markdown("**พัฒนาโดย // รศ.ดร.อิทธิพล มีผล ภาควิชาครุศาสตร์โยธา มจพ.**")
-st.markdown("---")
+# =====================================================
+# CSS Theme — สีฟ้าอ่อน Engineering
+# =====================================================
+st.markdown("""
+<style>
+/* ── Base & Background ── */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(160deg, #eaf4fb 0%, #f4f9fe 60%, #e8f3fa 100%);
+}
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
+/* ── App Header ── */
+.app-header {
+    background: linear-gradient(135deg, #1565c0 0%, #1976d2 50%, #42a5f5 100%);
+    border-radius: 14px;
+    padding: 20px 28px 16px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(21,101,192,0.25);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.app-header-icon { font-size: 2.4rem; }
+.app-header-title {
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    margin: 0;
+}
+.app-header-sub {
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.82);
+    margin: 3px 0 0 0;
+}
+
+/* ── Panel Cards ── */
+.panel-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 10px rgba(21,101,192,0.08);
+    border: 1px solid rgba(21,101,192,0.10);
+}
+.panel-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #1565c0;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e3f2fd;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ── Layer Cards ── */
+.layer-card {
+    background: #f0f7ff;
+    border-left: 4px solid #1976d2;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+.layer-badge {
+    display: inline-block;
+    background: #1976d2;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+
+/* ── Metric Card ── */
+.metric-card {
+    background: linear-gradient(135deg, #1565c0, #1e88e5);
+    border-radius: 10px;
+    padding: 14px 18px;
+    text-align: center;
+    color: white;
+    margin-bottom: 12px;
+    box-shadow: 0 3px 12px rgba(21,101,192,0.20);
+}
+.metric-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+}
+.metric-label {
+    font-size: 0.78rem;
+    opacity: 0.88;
+    margin-top: 3px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* ── Summary Table ── */
+.summary-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 4px;
+    font-size: 0.83rem;
+}
+.summary-table thead tr th {
+    background: #1565c0;
+    color: white;
+    padding: 7px 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    font-size: 0.78rem;
+}
+.summary-table thead tr th:first-child { border-radius: 6px 0 0 6px; }
+.summary-table thead tr th:last-child  { border-radius: 0 6px 6px 0; }
+.summary-table tbody tr td {
+    background: #f8fbff;
+    padding: 6px 10px;
+    border-top: 1px solid #e3f2fd;
+    border-bottom: 1px solid #e3f2fd;
+    color: #263238;
+}
+.summary-table tbody tr td:first-child {
+    border-left: 1px solid #e3f2fd;
+    border-radius: 6px 0 0 6px;
+}
+.summary-table tbody tr td:last-child {
+    border-right: 1px solid #e3f2fd;
+    border-radius: 0 6px 6px 0;
+}
+.summary-table tbody tr:hover td { background: #e8f4fd; }
+
+/* ── Streamlit Widgets Override ── */
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input {
+    border: 1.5px solid #bbdefb !important;
+    border-radius: 7px !important;
+    background: #f7fbff !important;
+}
+div[data-testid="stNumberInput"] input:focus,
+div[data-testid="stTextInput"] input:focus {
+    border-color: #1976d2 !important;
+    box-shadow: 0 0 0 2px rgba(25,118,210,0.15) !important;
+}
+div[data-testid="stSelectbox"] > div > div {
+    border: 1.5px solid #bbdefb !important;
+    border-radius: 7px !important;
+    background: #f7fbff !important;
+}
+
+/* ── Buttons ── */
+.stButton > button {
+    background: linear-gradient(135deg, #1565c0, #1976d2) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    padding: 0.45rem 1rem !important;
+    transition: all 0.2s !important;
+    box-shadow: 0 2px 8px rgba(21,101,192,0.20) !important;
+}
+.stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 14px rgba(21,101,192,0.30) !important;
+    background: linear-gradient(135deg, #0d47a1, #1565c0) !important;
+}
+.stDownloadButton > button {
+    background: linear-gradient(135deg, #0277bd, #0288d1) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 8px rgba(2,119,189,0.20) !important;
+    transition: all 0.2s !important;
+}
+.stDownloadButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 14px rgba(2,119,189,0.30) !important;
+}
+
+/* ── Divider ── */
+hr { border-color: #bbdefb !important; }
+
+/* ── Expander ── */
+details { border: 1px solid #bbdefb !important; border-radius: 8px !important; }
+details summary { color: #1565c0 !important; font-weight: 600 !important; }
+
+/* ── Success/Error ── */
+div[data-testid="stAlert"] { border-radius: 8px !important; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #e3f2fd; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #90caf9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #1976d2; }
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================================
-# วัสดุมาตรฐานที่ใช้บ่อย (Preset Materials)
+# App Header
+# =====================================================
+st.markdown("""
+<div class="app-header">
+    <div class="app-header-icon">🛣️</div>
+    <div>
+        <div class="app-header-title">Pavement Structure Generator</div>
+        <div class="app-header-sub">รศ.ดร.อิทธิพล มีผล &nbsp;|&nbsp; ภาควิชาครุศาสตร์โยธา มจพ. &nbsp;|&nbsp; AASHTO 1993</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# =====================================================
+# วัสดุมาตรฐาน (Preset Materials)
 # =====================================================
 PRESET_MATERIALS = {
-    "ผิวทางลาดยาง (AC)": {"color": "#1a1a1a", "pattern": "solid"},
-    "ผิวทางคอนกรีต (JPCP/JRCP)": {"color": "#a9a9a9", "pattern": "solid"},
-    "ผิวทางคอนกรีต (CRCP)": {"color": "#a9a9a9", "pattern": "solid"},
-    "รองพื้นทางวัสดุ AC": {"color": "#1a1a1a", "pattern": "solid"},
-    "พื้นทาง CTB": {"color": "#d3d3d3", "pattern": "dots"},
-    "Lean Concrete Base": {"color": "#c0c0c0", "pattern": "hatch"},
-    "หินคลุก (Crushed Rock)": {"color": "#d2b48c", "pattern": "dots"},
-    "รองพื้นทางวัสดุมวลรวม": {"color": "#d2a679", "pattern": "solid"},
-    "ดินถมคันทาง (Embankment)": {"color": "#f5deb3", "pattern": "solid"},
-    "ดินเดิม (Subgrade)": {"color": "#deb887", "pattern": "solid"},
-    "ทรายถมคันทาง (Sand Embankment)": {"color": "#f4e4ba", "pattern": "dots"},
-    "กำหนดเอง": {"color": "#cccccc", "pattern": "solid"}
+    "ผิวทางลาดยาง (AC)":                   {"color": "#1a1a1a", "pattern": "solid"},
+    "ผิวทางคอนกรีต (JPCP/JRCP)":           {"color": "#a0a0a0", "pattern": "solid"},
+    "ผิวทางคอนกรีต (CRCP)":                {"color": "#a0a0a0", "pattern": "solid"},
+    "รองพื้นทางวัสดุ AC":                  {"color": "#2a2a2a", "pattern": "solid"},
+    "พื้นทาง CTB":                          {"color": "#c8c8c8", "pattern": "hatch"},
+    "Lean Concrete Base":                   {"color": "#b8b8b8", "pattern": "hatch"},
+    "หินคลุก (Crushed Rock)":              {"color": "#c8a96e", "pattern": "dots"},
+    "หินคลุกผสมซีเมนต์ (Soil-Cement)":    {"color": "#b0c4a0", "pattern": "hatch"},
+    "รองพื้นทางวัสดุมวลรวม":              {"color": "#d4a06a", "pattern": "solid"},
+    "ดินถมคันทาง (Embankment)":            {"color": "#e8d4a0", "pattern": "solid"},
+    "ดินเดิม (Subgrade)":                  {"color": "#c8a87a", "pattern": "solid"},
+    "ทรายถมคันทาง (Sand Embankment)":      {"color": "#f0dca0", "pattern": "dots"},
+    "กำหนดเอง":                            {"color": "#cccccc", "pattern": "solid"},
 }
 
 PATTERN_OPTIONS = {
     "solid": "สีทึบ",
-    "dots": "จุดกระจาย",
-    "hatch": "เส้นลาย"
+    "dots":  "จุดกระจาย",
+    "hatch": "เส้นลาย",
 }
 
 HATCH_STYLES = {
-    "///": "เส้นเอียง ///",
+    "///":  "เส้นเอียง ///",
     "\\\\\\": "เส้นเอียง \\\\\\",
-    "xxx": "กากบาท xxx",
-    "...": "จุด ...",
-    "ooo": "วงกลม ooo",
-    "+++": "บวก +++"
+    "xxx":  "กากบาท xxx",
+    "...":  "จุด ...",
+    "ooo":  "วงกลม ooo",
+    "+++":  "บวก +++",
 }
 
 # =====================================================
-# ฟังก์ชันวาดโครงสร้างชั้นทาง (ปรับขนาดให้เล็กลง)
+# ฟังก์ชันวาดโครงสร้างชั้นทาง
 # =====================================================
-def draw_pavement_structure(layers, figsize=(10,6), title="โครงสร้างชั้นทาง"):
-    """
-    วาดรูปโครงสร้างชั้นทาง (ขนาดกะทัดรัด)
-    """
-    # คำนวณความหนารวม
+def draw_pavement_structure(layers, figsize=(9, 6), title="โครงสร้างชั้นทาง"):
     total_thickness = sum(layer['thickness'] for layer in layers)
-    
-    # ปรับ figsize ตามความหนารวม (ให้สั้นลง)
-    fig_height = max(4, min(8, total_thickness / 30))
-    fig, ax = plt.subplots(figsize=(figsize[0], fig_height))
-    
-    # กำหนดขนาดของรูป - ใช้ scale factor เพื่อให้รูปกะทัดรัด
-    scale = 100 / max(total_thickness, 100)  # normalize ให้ความสูงไม่เกิน 100 units
-    layer_width = 6
-    x_start = 2
-    
-    # วาดแต่ละชั้นจากบนลงล่าง
+    scale = 100 / max(total_thickness, 100)
+
+    fig_h = max(5, min(9, total_thickness / 25))
+    fig, ax = plt.subplots(figsize=(figsize[0], fig_h))
+    fig.patch.set_facecolor('#ffffff')
+
+    layer_width = 7
+    x_start = 2.5
     current_y = total_thickness * scale
-    
+
     for i, layer in enumerate(layers):
-        thickness = layer['thickness'] * scale
-        color = layer.get('color', 'gray')
+        t = layer['thickness'] * scale
+        color   = layer.get('color', '#888888')
         pattern = layer.get('pattern', 'solid')
-        hatch_style = layer.get('hatch_style', '///')
-        name = layer.get('name', f'Layer {i+1}')
-        
-        # คำนวณตำแหน่ง y
-        y_bottom = current_y - thickness
-        
-        # สร้าง rectangle
+        hatch   = layer.get('hatch_style', '///')
+        name    = layer.get('name', f'Layer {i+1}')
+        y_bot   = current_y - t
+
+        # วาด rectangle
         if pattern == 'dots':
             rect = patches.Rectangle(
-                (x_start, y_bottom), layer_width, thickness,
-                linewidth=1.5, edgecolor='black', facecolor=color
+                (x_start, y_bot), layer_width, t,
+                linewidth=1.5, edgecolor='#444444', facecolor=color
             )
             ax.add_patch(rect)
-            
-            # เพิ่มจุด pattern
             np.random.seed(i * 42)
-            n_dots = int(thickness * layer_width * 0.5)
-            if n_dots > 0 and thickness > 2:
-                dot_x = np.random.uniform(x_start + 0.2, x_start + layer_width - 0.2, n_dots)
-                dot_y = np.random.uniform(y_bottom + thickness*0.1, y_bottom + thickness*0.9, n_dots)
-                ax.scatter(dot_x, dot_y, s=10, c='gray', alpha=0.5)
-                
+            n_dots = max(0, int(t * layer_width * 0.6))
+            if n_dots > 0 and t > 1.5:
+                dx = np.random.uniform(x_start + 0.3, x_start + layer_width - 0.3, n_dots)
+                dy = np.random.uniform(y_bot + t*0.1, y_bot + t*0.9, n_dots)
+                ax.scatter(dx, dy, s=8, c='#666666', alpha=0.55, zorder=3)
         elif pattern == 'hatch':
             rect = patches.Rectangle(
-                (x_start, y_bottom), layer_width, thickness,
-                linewidth=1, edgecolor='black', facecolor=color,
-                hatch=hatch_style
+                (x_start, y_bot), layer_width, t,
+                linewidth=1.5, edgecolor='#444444', facecolor=color, hatch=hatch
             )
             ax.add_patch(rect)
         else:
             rect = patches.Rectangle(
-                (x_start, y_bottom), layer_width, thickness,
-                linewidth=1, edgecolor='black', facecolor=color
+                (x_start, y_bot), layer_width, t,
+                linewidth=1.5, edgecolor='#444444', facecolor=color
             )
             ax.add_patch(rect)
-        
-        # เพิ่มเส้นบอกขนาด (dimension line) ด้านซ้าย - แสดงความหนาจริง
-        dim_x = x_start - 1.5
-        ax.annotate('', xy=(dim_x, y_bottom), xytext=(dim_x, current_y),
-                   arrowprops=dict(arrowstyle='<->', color='black', lw=0.1))
-        ax.text(dim_x - 5, (y_bottom + current_y) / 2, f'{int(layer["thickness"])} cm',
-               ha='center', va='center', fontsize=8, rotation=0)
-        
-        # เพิ่มชื่อวัสดุด้านขวา
-        ax.text(x_start + layer_width + 0.7, (y_bottom + current_y) / 2, name,
-               ha='left', va='center', fontsize=8)
-        
-        current_y = y_bottom
-    
-    # ตั้งค่าแกน
-    ax.set_xlim(-0.5, 14)
-    ax.set_ylim(-8, total_thickness * scale + 12)
+
+        # Dimension line ซ้าย
+        dim_x = x_start - 1.6
+        mid_y = (y_bot + current_y) / 2
+        # เส้นขีด
+        ax.plot([dim_x - 0.15, dim_x + 0.15], [y_bot, y_bot],
+                color='#333333', lw=1.0, zorder=5)
+        ax.plot([dim_x - 0.15, dim_x + 0.15], [current_y, current_y],
+                color='#333333', lw=1.0, zorder=5)
+        ax.annotate('', xy=(dim_x, y_bot), xytext=(dim_x, current_y),
+                    arrowprops=dict(arrowstyle='<->', color='#333333',
+                                   lw=1.0, mutation_scale=8))
+        ax.text(dim_x - 0.9, mid_y,
+                f'{int(layer["thickness"])} cm',
+                ha='center', va='center', fontsize=8.5,
+                color='#1a237e', fontweight='bold')
+
+        # ชื่อวัสดุขวา
+        ax.text(x_start + layer_width + 0.55, mid_y, name,
+                ha='left', va='center', fontsize=9.0, color='#212121')
+
+        current_y = y_bot
+
+    # เส้นพื้นดิน (subgrade line)
+    ax.plot([x_start - 0.3, x_start + layer_width + 0.3], [0, 0],
+            color='#5d4037', lw=2.0, ls='--', zorder=6)
+
+    # Title
+    ax.text(x_start + layer_width / 2, total_thickness * scale + 7,
+            title, ha='center', va='center',
+            fontsize=11, fontweight='bold', color='#0d47a1')
+
+    # Not to Scale
+    ax.text(x_start + layer_width + 0.5, -5.5,
+            'Not to Scale', ha='left', va='center',
+            fontsize=7, style='italic', color='#9e9e9e')
+
+    ax.set_xlim(-0.5, 16)
+    ax.set_ylim(-10, total_thickness * scale + 14)
     ax.set_aspect('equal')
     ax.axis('off')
-    
-    # เพิ่มหัวข้อ
-    ax.text(x_start + layer_width/2, total_thickness * scale + 6, title,
-           ha='center', va='center', fontsize=10, fontweight='bold')
-    
-    # เพิ่ม "Not to Scale"
-    ax.text(x_start + layer_width, -4, 'Not to Scale',
-           ha='right', va='center', fontsize=5, style='italic')
-    
-    plt.tight_layout()
+    plt.tight_layout(pad=0.5)
     return fig
 
 # =====================================================
-# Sidebar: ตั้งค่าทั่วไป
+# Session State Helpers
 # =====================================================
-with st.sidebar:
-    st.header("⚙️ ตั้งค่าทั่วไป")
-    
-    # =====================================================
-    # Upload JSON
-    # =====================================================
-    st.markdown("---")
-    st.subheader("📂 โหลด/บันทึกข้อมูล")
-    
-    uploaded_json = st.file_uploader("📂 โหลดข้อมูลจากไฟล์ JSON", type=['json'])
-    
+def get_ss(key, default):
+    return st.session_state.get(key, default)
+
+# =====================================================
+# MAIN LAYOUT — Two-Column Split
+# col_left (40%) = Input   |   col_right (60%) = Output
+# =====================================================
+col_left, col_right = st.columns([4, 6], gap="large")
+
+# ─────────────────────────────────────────────────────
+# LEFT COLUMN — Input Panel
+# ─────────────────────────────────────────────────────
+with col_left:
+
+    # ── โหลด JSON ──
+    st.markdown('<div class="panel-card">'
+                '<div class="panel-title">📂 โหลด / บันทึกข้อมูล</div>',
+                unsafe_allow_html=True)
+
+    uploaded_json = st.file_uploader("โหลดข้อมูลจากไฟล์ JSON",
+                                     type=['json'], label_visibility="collapsed")
+
     if uploaded_json is not None:
         try:
             loaded_data = json.load(uploaded_json)
-            
-            # ตรวจสอบว่าเป็นไฟล์ใหม่
             file_id = f"{uploaded_json.name}_{uploaded_json.size}"
-            if st.session_state.get('last_uploaded_file') != file_id:
+            if get_ss('last_uploaded_file', '') != file_id:
                 st.session_state['last_uploaded_file'] = file_id
-                
-                # อัพเดท session_state สำหรับ chart_title
-                st.session_state['input_chart_title'] = loaded_data.get('chart_title', "โครงสร้างชั้นทาง โครงการ......")
-                
-                # อัพเดท session_state สำหรับ num_layers
-                st.session_state['input_num_layers'] = loaded_data.get('num_layers', 4)
-                
-                # อัพเดท session_state สำหรับ layers
-                if 'layers' in loaded_data:
-                    num_layers_loaded = len(loaded_data['layers'])
-                    st.session_state['input_num_layers'] = num_layers_loaded
-                    
-                    for i, layer_data in enumerate(loaded_data['layers']):
-                        st.session_state[f'input_material_{i}'] = layer_data.get('name', 'กำหนดเอง')
-                        st.session_state[f'input_thickness_{i}'] = layer_data.get('thickness', 20)
-                        st.session_state[f'input_color_{i}'] = layer_data.get('color', '#cccccc')
-                        st.session_state[f'input_pattern_{i}'] = layer_data.get('pattern', 'solid')
-                        st.session_state[f'input_hatch_{i}'] = layer_data.get('hatch_style', '///')
-                
+                st.session_state['input_chart_title'] = loaded_data.get(
+                    'chart_title', "โครงสร้างชั้นทาง โครงการ......")
+                layers_data = loaded_data.get('layers', [])
+                st.session_state['input_num_layers'] = len(layers_data)
+                for i, ld in enumerate(layers_data):
+                    st.session_state[f'input_material_{i}']  = ld.get('name', 'กำหนดเอง')
+                    st.session_state[f'input_thickness_{i}'] = ld.get('thickness', 20)
+                    st.session_state[f'input_color_{i}']     = ld.get('color', '#cccccc')
+                    st.session_state[f'input_pattern_{i}']   = ld.get('pattern', 'solid')
+                    st.session_state[f'input_hatch_{i}']     = ld.get('hatch_style', '///')
                 st.success("✅ โหลดข้อมูลสำเร็จ!")
                 st.rerun()
-                
         except Exception as e:
             st.error(f"❌ ไม่สามารถอ่านไฟล์ได้: {e}")
-    
-    st.markdown("---")
-    
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── ตั้งค่าทั่วไป ──
+    st.markdown('<div class="panel-card">'
+                '<div class="panel-title">⚙️ ตั้งค่าทั่วไป</div>',
+                unsafe_allow_html=True)
+
     chart_title = st.text_input(
-        "หัวข้อรูป", 
-        value=st.session_state.get('input_chart_title', "โครงสร้างชั้นทาง โครงการ......"),
-        key="input_chart_title"
+        "หัวข้อรูป",
+        value=get_ss('input_chart_title', "โครงสร้างชั้นทาง โครงการ......"),
+        key="input_chart_title",
+        placeholder="ระบุชื่อโครงการ..."
     )
-    
-    num_layers = st.number_input(
-        "จำนวนชั้น",
-        min_value=1,
-        max_value=10,
-        value=st.session_state.get('input_num_layers', 4),
-        step=1,
-        key="input_num_layers"
-    )
-    
-    st.markdown("---")
-    st.header("📥 โหลดตัวอย่าง")
-    
-    preset_options = ["-- กำหนดเอง --", "ทางลาดยาง (Flexible)", "ทางคอนกรีต (Rigid)"]
-    current_preset = st.session_state.get('input_preset_choice', "-- กำหนดเอง --")
-    default_preset_idx = preset_options.index(current_preset) if current_preset in preset_options else 0
-    
-    preset_choice = st.selectbox(
-        "เลือกตัวอย่างโครงสร้าง",
-        preset_options,
-        index=default_preset_idx,
-        key="input_preset_choice"
-    )
-    
-    if st.button("โหลดตัวอย่าง", use_container_width=True):
+
+    col_n, col_p = st.columns([1, 2])
+    with col_n:
+        num_layers = st.number_input(
+            "จำนวนชั้น", min_value=1, max_value=10,
+            value=get_ss('input_num_layers', 4), step=1,
+            key="input_num_layers"
+        )
+    with col_p:
+        preset_options = ["-- กำหนดเอง --", "ทางลาดยาง (Flexible)", "ทางคอนกรีต (Rigid)"]
+        preset_choice = st.selectbox(
+            "โหลดตัวอย่าง", preset_options,
+            index=0, key="input_preset_choice"
+        )
+
+    if st.button("⚡ โหลดตัวอย่าง", use_container_width=True):
         if preset_choice == "ทางลาดยาง (Flexible)":
-            st.session_state['preset_layers'] = [
-                {"name": "ผิวทางลาดยาง (AC)", "thickness": 20, "color": "#1a1a1a", "pattern": "solid"},
-                {"name": "พื้นทาง CTB", "thickness": 35, "color": "#d3d3d3", "pattern": "dots"},
-                {"name": "รองพื้นทางวัสดุมวลรวม", "thickness": 30, "color": "#d2a679", "pattern": "solid"},
-                {"name": "ดินถม (Fill Material)", "thickness": 100, "color": "#f5deb3", "pattern": "solid"}
+            preset = [
+                {"name": "ผิวทางลาดยาง (AC)",            "thickness": 20, "color": "#1a1a1a", "pattern": "solid"},
+                {"name": "พื้นทาง CTB",                   "thickness": 35, "color": "#c8c8c8", "pattern": "hatch"},
+                {"name": "รองพื้นทางวัสดุมวลรวม",        "thickness": 30, "color": "#d4a06a", "pattern": "solid"},
+                {"name": "ดินถมคันทาง (Embankment)",      "thickness": 100,"color": "#e8d4a0", "pattern": "solid"},
             ]
-            st.rerun()
         elif preset_choice == "ทางคอนกรีต (Rigid)":
-            st.session_state['preset_layers'] = [
-                {"name": "ผิวทางคอนกรีต (JPCP/JRCP)", "thickness": 28, "color": "#a9a9a9", "pattern": "solid"},
-                {"name": "Lean Concrete Base", "thickness": 15, "color": "#c0c0c0", "pattern": "hatch"},
-                {"name": "หินคลุก (Crushed Rock)", "thickness": 20, "color": "#d2b48c", "pattern": "dots"},
-                {"name": "ดินเดิม (Subgrade)", "thickness": 50, "color": "#deb887", "pattern": "solid"}
+            preset = [
+                {"name": "ผิวทางคอนกรีต (JPCP/JRCP)",   "thickness": 28, "color": "#a0a0a0", "pattern": "solid"},
+                {"name": "Lean Concrete Base",             "thickness": 15, "color": "#b8b8b8", "pattern": "hatch"},
+                {"name": "หินคลุก (Crushed Rock)",        "thickness": 20, "color": "#c8a96e", "pattern": "dots"},
+                {"name": "ดินเดิม (Subgrade)",            "thickness": 50, "color": "#c8a87a", "pattern": "solid"},
             ]
+        else:
+            preset = None
+
+        if preset:
+            st.session_state['input_num_layers'] = len(preset)
+            for i, p in enumerate(preset):
+                st.session_state[f'input_material_{i}']  = p['name']
+                st.session_state[f'input_thickness_{i}'] = p['thickness']
+                st.session_state[f'input_color_{i}']     = p['color']
+                st.session_state[f'input_pattern_{i}']   = p['pattern']
+                st.session_state[f'input_hatch_{i}']     = p.get('hatch_style', '///')
             st.rerun()
 
-# =====================================================
-# Main Content: กำหนดชั้นทาง
-# =====================================================
-st.header("📋 กำหนดรายละเอียดชั้นทาง")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Initialize layers
-layers = []
+    # ── รายละเอียดแต่ละชั้น ──
+    st.markdown('<div class="panel-card">'
+                '<div class="panel-title">📋 รายละเอียดชั้นทาง</div>',
+                unsafe_allow_html=True)
 
-# สร้าง columns สำหรับแต่ละชั้น
-cols_per_row = 2
-rows_needed = (int(num_layers) + cols_per_row - 1) // cols_per_row
+    layers = []
+    material_list = list(PRESET_MATERIALS.keys())
 
-for row in range(rows_needed):
-    cols = st.columns(cols_per_row)
-    for col_idx in range(cols_per_row):
-        layer_idx = row * cols_per_row + col_idx
-        if layer_idx < num_layers:
-            with cols[col_idx]:
-                st.subheader(f"ชั้นที่ {layer_idx + 1}")
-                
-                # ตรวจสอบว่ามี preset หรือไม่
-                preset_data = None
-                if 'preset_layers' in st.session_state and layer_idx < len(st.session_state['preset_layers']):
-                    preset_data = st.session_state['preset_layers'][layer_idx]
-                
-                # เลือกวัสดุ preset
-                material_list = list(PRESET_MATERIALS.keys())
-                
-                # หา default material จาก session_state หรือ preset
-                default_material = st.session_state.get(f'input_material_{layer_idx}', None)
-                if default_material is None and preset_data:
-                    default_material = preset_data['name']
-                if default_material is None:
-                    default_material = material_list[0]
-                
-                default_material_idx = material_list.index(default_material) if default_material in material_list else 0
-                
-                material = st.selectbox(
-                    "ประเภทวัสดุ",
-                    material_list,
-                    index=default_material_idx,
-                    key=f"input_material_{layer_idx}"
-                )
-                
-                # ใช้ชื่อวัสดุที่เลือกเป็นป้ายกำกับอัตโนมัติ
-                name = material
-                
-                # ความหนา
-                default_thickness = st.session_state.get(f'input_thickness_{layer_idx}', None)
-                if default_thickness is None and preset_data:
-                    default_thickness = preset_data['thickness']
-                if default_thickness is None:
-                    default_thickness = 20
-                
-                thickness = st.number_input(
-                    "ความหนา (cm)",
-                    min_value=1,
-                    max_value=500,
-                    value=int(default_thickness),
-                    step=5,
-                    key=f"input_thickness_{layer_idx}"
-                )
-                
-                # สี
-                default_color = st.session_state.get(f'input_color_{layer_idx}', None)
-                if default_color is None:
-                    default_color = PRESET_MATERIALS[material]['color']
-                
-                color = st.color_picker(
-                    "สี",
-                    value=default_color,
-                    key=f"input_color_{layer_idx}"
-                )
-                
-                # Pattern
-                default_pattern = st.session_state.get(f'input_pattern_{layer_idx}', None)
-                if default_pattern is None:
-                    default_pattern = PRESET_MATERIALS[material]['pattern']
-                
-                pattern_keys = list(PATTERN_OPTIONS.keys())
-                default_pattern_idx = pattern_keys.index(default_pattern) if default_pattern in pattern_keys else 0
-                
-                pattern = st.selectbox(
-                    "รูปแบบ",
-                    pattern_keys,
-                    format_func=lambda x: PATTERN_OPTIONS[x],
-                    index=default_pattern_idx,
-                    key=f"input_pattern_{layer_idx}"
-                )
-                
-                # Hatch style (ถ้าเลือก hatch)
-                default_hatch = st.session_state.get(f'input_hatch_{layer_idx}', '///')
-                hatch_keys = list(HATCH_STYLES.keys())
-                default_hatch_idx = hatch_keys.index(default_hatch) if default_hatch in hatch_keys else 0
-                
-                hatch_style = "///"
-                if pattern == "hatch":
-                    hatch_style = st.selectbox(
-                        "รูปแบบเส้น",
-                        hatch_keys,
-                        format_func=lambda x: HATCH_STYLES[x],
-                        index=default_hatch_idx,
-                        key=f"input_hatch_{layer_idx}"
-                    )
-                
-                # เก็บข้อมูลชั้น
-                layers.append({
-                    'name': name,
-                    'thickness': thickness,
-                    'color': color,
-                    'pattern': pattern,
-                    'hatch_style': hatch_style
-                })
-                
-                st.markdown("---")
+    for i in range(int(num_layers)):
+        st.markdown(f'<div class="layer-badge">ชั้นที่ {i + 1}</div>', unsafe_allow_html=True)
 
-# =====================================================
-# แสดงผลรูป
-# =====================================================
-st.header("📊 ผลลัพธ์")
+        # Material
+        saved_mat = get_ss(f'input_material_{i}', None)
+        default_mat_idx = material_list.index(saved_mat) if saved_mat in material_list else 0
+        material = st.selectbox(
+            "ประเภทวัสดุ", material_list,
+            index=default_mat_idx, key=f"input_material_{i}",
+            label_visibility="collapsed"
+        )
 
-col1, col2 = st.columns([2, 1])
+        c1, c2, c3 = st.columns([3, 2, 2])
+        with c1:
+            default_t = get_ss(f'input_thickness_{i}', 20)
+            thickness = st.number_input(
+                "ความหนา (cm)", min_value=1, max_value=500,
+                value=int(default_t), step=5, key=f"input_thickness_{i}"
+            )
+        with c2:
+            default_col = get_ss(f'input_color_{i}', None) or PRESET_MATERIALS[material]['color']
+            color = st.color_picker("สี", value=default_col, key=f"input_color_{i}")
+        with c3:
+            default_pat = get_ss(f'input_pattern_{i}', None) or PRESET_MATERIALS[material]['pattern']
+            pat_keys = list(PATTERN_OPTIONS.keys())
+            def_pat_idx = pat_keys.index(default_pat) if default_pat in pat_keys else 0
+            pattern = st.selectbox(
+                "รูปแบบ", pat_keys,
+                format_func=lambda x: PATTERN_OPTIONS[x],
+                index=def_pat_idx, key=f"input_pattern_{i}"
+            )
 
-with col1:
+        # Hatch style
+        hatch_style = "///"
+        if pattern == "hatch":
+            default_h = get_ss(f'input_hatch_{i}', '///')
+            h_keys = list(HATCH_STYLES.keys())
+            def_h_idx = h_keys.index(default_h) if default_h in h_keys else 0
+            hatch_style = st.selectbox(
+                "รูปแบบเส้น", h_keys,
+                format_func=lambda x: HATCH_STYLES[x],
+                index=def_h_idx, key=f"input_hatch_{i}"
+            )
+
+        layers.append({
+            'name':        material,
+            'thickness':   thickness,
+            'color':       color,
+            'pattern':     pattern,
+            'hatch_style': hatch_style,
+        })
+
+        if i < int(num_layers) - 1:
+            st.markdown("<hr style='margin:8px 0; border-color:#bbdefb'>", unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────
+# RIGHT COLUMN — Output Panel
+# ─────────────────────────────────────────────────────
+with col_right:
+
+    # ── รูปโครงสร้างชั้นทาง ──
+    st.markdown('<div class="panel-card">'
+                '<div class="panel-title">📊 รูปโครงสร้างชั้นทาง</div>',
+                unsafe_allow_html=True)
+
     if layers:
         fig = draw_pavement_structure(layers, title=chart_title)
-        st.pyplot(fig)
-        
-        # สร้างปุ่มดาวน์โหลด
+        st.pyplot(fig, use_container_width=True)
+
         buf = BytesIO()
-        fig.savefig(buf, format='png', dpi=300, bbox_inches='tight', 
-                   facecolor='white', edgecolor='none')
+        fig.savefig(buf, format='png', dpi=300, bbox_inches='tight',
+                    facecolor='white', edgecolor='none')
         buf.seek(0)
-        
+        plt.close(fig)
+
         st.download_button(
-            label="📥 ดาวน์โหลดรูป (PNG)",
+            label="📥 ดาวน์โหลดรูป (PNG, 300 dpi)",
             data=buf,
             file_name="pavement_structure.png",
             mime="image/png",
             use_container_width=True
         )
-        
-        plt.close(fig)
 
-with col2:
-    st.subheader("📋 สรุปข้อมูล")
-    
-    total_thickness = sum(layer['thickness'] for layer in layers)
-    st.metric("ความหนารวม", f"{total_thickness} cm")
-    
-    st.markdown("**รายละเอียดแต่ละชั้น:**")
-    for i, layer in enumerate(layers):
-        with st.expander(f"ชั้นที่ {i+1}: {layer['name']}"):
-            st.write(f"- ความหนา: {layer['thickness']} cm")
-            st.write(f"- รูปแบบ: {PATTERN_OPTIONS[layer['pattern']]}")
-            st.markdown(f"- สี: <span style='background-color:{layer['color']}; padding: 2px 10px; border-radius: 3px;'>&nbsp;&nbsp;&nbsp;</span> {layer['color']}", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# =====================================================
-# Download JSON
-# =====================================================
-st.markdown("---")
-st.subheader("💾 บันทึกข้อมูล")
+    # ── สรุปข้อมูล ──
+    st.markdown('<div class="panel-card">'
+                '<div class="panel-title">📋 สรุปข้อมูลชั้นทาง</div>',
+                unsafe_allow_html=True)
 
-# สร้างข้อมูลสำหรับ export
-export_data = {
-    'chart_title': chart_title,
-    'num_layers': int(num_layers),
-    'layers': layers
-}
+    if layers:
+        total_thickness = sum(layer['thickness'] for layer in layers)
 
-json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
+        # Metric card
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{total_thickness} <span style="font-size:1.1rem">cm</span></div>
+            <div class="metric-label">ความหนารวมทั้งหมด</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-st.download_button(
-    label="💾 Download Input (JSON)",
-    data=json_str,
-    file_name="pavement_structure_data.json",
-    mime="application/json",
-    use_container_width=True
-)
+        # Summary table
+        rows_html = ""
+        for i, layer in enumerate(layers):
+            swatch = (f"<span style='display:inline-block;width:16px;height:14px;"
+                      f"background:{layer['color']};border:1px solid #888;"
+                      f"border-radius:3px;vertical-align:middle;margin-right:5px'></span>")
+            rows_html += f"""
+            <tr>
+                <td style="text-align:center;font-weight:700;color:#1565c0">{i+1}</td>
+                <td>{layer['name']}</td>
+                <td style="text-align:center">{layer['thickness']} cm</td>
+                <td style="text-align:center">{PATTERN_OPTIONS[layer['pattern']]}</td>
+                <td style="text-align:center">{swatch}</td>
+            </tr>"""
+
+        st.markdown(f"""
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>วัสดุ</th>
+                    <th>หนา</th>
+                    <th>รูปแบบ</th>
+                    <th>สี</th>
+                </tr>
+            </thead>
+            <tbody>{rows_html}</tbody>
+        </table>
+        """, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── บันทึก JSON ──
+    st.markdown('<div class="panel-card">'
+                '<div class="panel-title">💾 บันทึกข้อมูล JSON</div>',
+                unsafe_allow_html=True)
+
+    export_data = {
+        'chart_title': chart_title,
+        'num_layers':  int(num_layers),
+        'layers':      layers,
+    }
+    json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
+
+    st.download_button(
+        label="💾 Download ข้อมูล (JSON)",
+        data=json_str,
+        file_name="pavement_structure_data.json",
+        mime="application/json",
+        use_container_width=True
+    )
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================
 # Footer
 # =====================================================
-st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: gray; font-size: 12px;'>
-    พัฒนาสำหรับงานวิศวกรรมทาง | Pavement Structure Graphic Generator<br>
-    สามารถปรับแต่งจำนวนชั้น ความหนา และวัสดุได้ตามต้องการ
+<div style='text-align:center;color:#90a4ae;font-size:11px;padding:12px 0 4px;'>
+    Pavement Structure Generator &nbsp;|&nbsp;
+    พัฒนาสำหรับงานวิศวกรรมทาง &nbsp;|&nbsp;
+    ภาควิชาครุศาสตร์โยธา มจพ.
 </div>
 """, unsafe_allow_html=True)
